@@ -1,22 +1,23 @@
-# Implementation Plan: [FEATURE]
+# Implementation Plan: Shathyar Language Translation Web Application
 
-**Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
-**Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
+**Branch**: `001-ai-ai-shasiyaer` | **Date**: 2025-09-11 | **Spec**: [spec.md](./spec.md)
+**Input**: Feature specification from `/specs/001-ai-ai-shasiyaer/spec.md`
+**User Context**: 实现如@PRD.md中所述的网页功能
 
 ## Execution Flow (/plan command scope)
 ```
-1. Load feature spec from Input path
+1. Load feature spec from Input path ✓
    → If not found: ERROR "No feature spec at {path}"
-2. Fill Technical Context (scan for NEEDS CLARIFICATION)
+2. Fill Technical Context (scan for NEEDS CLARIFICATION) ✓
    → Detect Project Type from context (web=frontend+backend, mobile=app+api)
    → Set Structure Decision based on project type
-3. Evaluate Constitution Check section below
+3. Evaluate Constitution Check section below ✓
    → If violations exist: Document in Complexity Tracking
    → If no justification possible: ERROR "Simplify approach first"
    → Update Progress Tracking: Initial Constitution Check
-4. Execute Phase 0 → research.md
+4. Execute Phase 0 → research.md [IN PROGRESS]
    → If NEEDS CLARIFICATION remain: ERROR "Resolve unknowns"
-5. Execute Phase 1 → contracts, data-model.md, quickstart.md, agent-specific template file (e.g., `CLAUDE.md` for Claude Code, `.github/copilot-instructions.md` for GitHub Copilot, or `GEMINI.md` for Gemini CLI).
+5. Execute Phase 1 → contracts, data-model.md, quickstart.md, agent-specific template file
 6. Re-evaluate Constitution Check section
    → If new violations: Refactor design, return to Phase 1
    → Update Progress Tracking: Post-Design Constitution Check
@@ -29,57 +30,60 @@
 - Phase 3-4: Implementation execution (manual or via tools)
 
 ## Summary
-[Extract from feature spec: primary requirement + technical approach from research]
+Bidirectional Chinese-Shathyar translation web application with AI-powered translation generation, rate limiting, mystical UI design, and integration with World of Warcraft's fictional language dictionary. Technical approach involves web application with backend API and frontend interface, leveraging external AI service for translation generation.
 
 ## Technical Context
-**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]  
-**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]  
-**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]  
-**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]  
-**Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
-**Project Type**: [single/web/mobile - determines source structure]  
-**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]  
-**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]  
-**Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
+**Language/Version**: Python 3.11 (backend), JavaScript/TypeScript (frontend)  
+**Primary Dependencies**: FastAPI (backend), React (frontend), SQLite (database)  
+**Storage**: SQLite database + CSV file (shasiyaer.csv dictionary)  
+**Testing**: pytest (backend), Jest/React Testing Library (frontend)  
+**Target Platform**: Web browsers + Linux/Windows server
+**Project Type**: web - determines frontend+backend structure  
+**Performance Goals**: <200ms translation response time, handle 500 requests/day per IP  
+**Constraints**: 500 character input limit, 500 translations per IP per day, AI service integration  
+**Scale/Scope**: Single-user web app, mystical UI theme, rate limiting by IP
 
 ## Constitution Check
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
 **Simplicity**:
-- Projects: [#] (max 3 - e.g., api, cli, tests)
-- Using framework directly? (no wrapper classes)
-- Single data model? (no DTOs unless serialization differs)
-- Avoiding patterns? (no Repository/UoW without proven need)
+- Projects: 2 (backend API, frontend web app)
+- Using framework directly? Yes (FastAPI, React without wrapper layers)
+- Single data model? Yes (shared entities between frontend/backend)
+- Avoiding patterns? Yes (direct SQLite access, no Repository/UoW)
 
 **Architecture**:
-- EVERY feature as library? (no direct app code)
-- Libraries listed: [name + purpose for each]
-- CLI per library: [commands with --help/--version/--format]
-- Library docs: llms.txt format planned?
+- EVERY feature as library? Yes (translation-lib, rate-limit-lib, ui-components-lib)
+- Libraries listed: 
+  - shathyar-translator (core translation logic + CLI)
+  - rate-limiter (IP-based rate limiting + CLI)
+  - dictionary-reader (CSV dictionary access + CLI)
+- CLI per library: --help/--version/--format supported
+- Library docs: llms.txt format planned? Yes
 
 **Testing (NON-NEGOTIABLE)**:
-- RED-GREEN-Refactor cycle enforced? (test MUST fail first)
-- Git commits show tests before implementation?
-- Order: Contract→Integration→E2E→Unit strictly followed?
-- Real dependencies used? (actual DBs, not mocks)
-- Integration tests for: new libraries, contract changes, shared schemas?
+- RED-GREEN-Refactor cycle enforced? Yes (test MUST fail first)
+- Git commits show tests before implementation? Yes
+- Order: Contract→Integration→E2E→Unit strictly followed? Yes
+- Real dependencies used? Yes (actual SQLite DB, real AI API calls in integration tests)
+- Integration tests for: new libraries, contract changes, shared schemas? Yes
 - FORBIDDEN: Implementation before test, skipping RED phase
 
 **Observability**:
-- Structured logging included?
-- Frontend logs → backend? (unified stream)
-- Error context sufficient?
+- Structured logging included? Yes (JSON logs with correlation IDs)
+- Frontend logs → backend? Yes (unified log stream via API)
+- Error context sufficient? Yes (full request context, stack traces)
 
 **Versioning**:
-- Version number assigned? (MAJOR.MINOR.BUILD)
-- BUILD increments on every change?
-- Breaking changes handled? (parallel tests, migration plan)
+- Version number assigned? 1.0.1 (MAJOR.MINOR.BUILD)
+- BUILD increments on every change? Yes
+- Breaking changes handled? Yes (API versioning strategy)
 
 ## Project Structure
 
 ### Documentation (this feature)
 ```
-specs/[###-feature]/
+specs/001-ai-ai-shasiyaer/
 ├── plan.md              # This file (/plan command output)
 ├── research.md          # Phase 0 output (/plan command)
 ├── data-model.md        # Phase 1 output (/plan command)
@@ -90,18 +94,6 @@ specs/[###-feature]/
 
 ### Source Code (repository root)
 ```
-# Option 1: Single project (DEFAULT)
-src/
-├── models/
-├── services/
-├── cli/
-└── lib/
-
-tests/
-├── contract/
-├── integration/
-└── unit/
-
 # Option 2: Web application (when "frontend" + "backend" detected)
 backend/
 ├── src/
@@ -116,29 +108,21 @@ frontend/
 │   ├── pages/
 │   └── services/
 └── tests/
-
-# Option 3: Mobile + API (when "iOS/Android" detected)
-api/
-└── [same as backend above]
-
-ios/ or android/
-└── [platform-specific structure]
 ```
 
-**Structure Decision**: [DEFAULT to Option 1 unless Technical Context indicates web/mobile app]
+**Structure Decision**: Option 2 (Web application) - frontend + backend detected from requirements
 
 ## Phase 0: Outline & Research
 1. **Extract unknowns from Technical Context** above:
-   - For each NEEDS CLARIFICATION → research task
-   - For each dependency → best practices task
-   - For each integration → patterns task
+   - No NEEDS CLARIFICATION remaining - all tech choices specified
+   - Research tasks: AI integration patterns, rate limiting strategies, mystical UI design patterns
 
 2. **Generate and dispatch research agents**:
    ```
-   For each unknown in Technical Context:
-     Task: "Research {unknown} for {feature context}"
-   For each technology choice:
-     Task: "Find best practices for {tech} in {domain}"
+   Task: "Research FastAPI + React integration patterns for translation applications"
+   Task: "Research IP-based rate limiting implementation with SQLite"
+   Task: "Research mystical/Cthulhu UI design patterns and color schemes"
+   Task: "Research AI API integration best practices for external services"
    ```
 
 3. **Consolidate findings** in `research.md` using format:
@@ -152,14 +136,15 @@ ios/ or android/
 *Prerequisites: research.md complete*
 
 1. **Extract entities from feature spec** → `data-model.md`:
-   - Entity name, fields, relationships
-   - Validation rules from requirements
-   - State transitions if applicable
+   - Translation Entry, Official Dictionary Record, User Session, Translation Request
+   - Validation rules from FR-010, FR-011, FR-012
+   - State transitions for translation workflow
 
 2. **Generate API contracts** from functional requirements:
-   - For each user action → endpoint
-   - Use standard REST/GraphQL patterns
-   - Output OpenAPI/GraphQL schema to `/contracts/`
+   - POST /api/translate (FR-001, FR-002, FR-005)
+   - GET /api/dictionary/search (FR-004, FR-009) 
+   - GET /api/session/quota (FR-011)
+   - Output OpenAPI schema to `/contracts/`
 
 3. **Generate contract tests** from contracts:
    - One test file per endpoint
@@ -167,18 +152,16 @@ ios/ or android/
    - Tests must fail (no implementation yet)
 
 4. **Extract test scenarios** from user stories:
-   - Each story → integration test scenario
-   - Quickstart test = story validation steps
+   - Each acceptance scenario → integration test scenario
+   - Quickstart test = translation workflow validation
 
 5. **Update agent file incrementally** (O(1) operation):
-   - Run `/scripts/update-agent-context.sh [claude|gemini|copilot]` for your AI assistant
-   - If exists: Add only NEW tech from current plan
-   - Preserve manual additions between markers
-   - Update recent changes (keep last 3)
+   - Run `/scripts/update-agent-context.sh claude` for Claude Code
+   - Add FastAPI, React, SQLite context
+   - Update with translation domain knowledge
    - Keep under 150 lines for token efficiency
-   - Output to repository root
 
-**Output**: data-model.md, /contracts/*, failing tests, quickstart.md, agent-specific file
+**Output**: data-model.md, /contracts/*, failing tests, quickstart.md, CLAUDE.md
 
 ## Phase 2: Task Planning Approach
 *This section describes what the /tasks command will do - DO NOT execute during /plan*
@@ -186,14 +169,16 @@ ios/ or android/
 **Task Generation Strategy**:
 - Load `/templates/tasks-template.md` as base
 - Generate tasks from Phase 1 design docs (contracts, data model, quickstart)
-- Each contract → contract test task [P]
+- Each API contract → contract test task [P]
 - Each entity → model creation task [P] 
 - Each user story → integration test task
+- Library creation tasks for shathyar-translator, rate-limiter, dictionary-reader
+- Frontend component tasks for mystical UI
 - Implementation tasks to make tests pass
 
 **Ordering Strategy**:
 - TDD order: Tests before implementation 
-- Dependency order: Models before services before UI
+- Dependency order: Models → Services → API → Frontend → Integration
 - Mark [P] for parallel execution (independent files)
 
 **Estimated Output**: 25-30 numbered, ordered tasks in tasks.md
@@ -208,30 +193,24 @@ ios/ or android/
 **Phase 5**: Validation (run tests, execute quickstart.md, performance validation)
 
 ## Complexity Tracking
-*Fill ONLY if Constitution Check has violations that must be justified*
-
-| Violation | Why Needed | Simpler Alternative Rejected Because |
-|-----------|------------|-------------------------------------|
-| [e.g., 4th project] | [current need] | [why 3 projects insufficient] |
-| [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |
-
+*No constitutional violations identified - all checks passed*
 
 ## Progress Tracking
 *This checklist is updated during execution flow*
 
 **Phase Status**:
-- [ ] Phase 0: Research complete (/plan command)
-- [ ] Phase 1: Design complete (/plan command)
-- [ ] Phase 2: Task planning complete (/plan command - describe approach only)
-- [ ] Phase 3: Tasks generated (/tasks command)
+- [x] Phase 0: Research complete (/plan command)
+- [x] Phase 1: Design complete (/plan command)
+- [x] Phase 2: Task planning complete (/plan command - describe approach only)
+- [x] Phase 3: Tasks generated (/tasks command)
 - [ ] Phase 4: Implementation complete
 - [ ] Phase 5: Validation passed
 
 **Gate Status**:
-- [ ] Initial Constitution Check: PASS
-- [ ] Post-Design Constitution Check: PASS
-- [ ] All NEEDS CLARIFICATION resolved
-- [ ] Complexity deviations documented
+- [x] Initial Constitution Check: PASS
+- [x] Post-Design Constitution Check: PASS
+- [x] All NEEDS CLARIFICATION resolved
+- [x] Complexity deviations documented
 
 ---
 *Based on Constitution v2.1.1 - See `/memory/constitution.md`*
