@@ -24,7 +24,8 @@
     "@hookform/resolvers": "^3.3.2",
     "zod": "^3.22.4",
     "clsx": "^2.0.0",
-    "react-hot-toast": "^2.4.1"
+    "react-hot-toast": "^2.4.1",
+    "tailwindcss": "^3.3.5"
   },
   "devDependencies": {
     "@types/react": "^18.2.37",
@@ -43,42 +44,7 @@
     "@testing-library/jest-dom": "^6.1.4",
     "@testing-library/user-event": "^14.5.1",
     "jsdom": "^22.1.0",
-    "tailwindcss": "^3.3.5",
     "autoprefixer": "^10.4.16",
     "postcss": "^8.4.31"
-  },
-  "eslintConfig": {
-    "extends": [
-      "eslint:recommended",
-      "@typescript-eslint/recommended",
-      "plugin:react-hooks/recommended"
-    ],
-    "parser": "@typescript-eslint/parser",
-    "parserOptions": {
-      "ecmaVersion": "latest",
-      "sourceType": "module",
-      "project": "./tsconfig.json"
-    },
-    "plugins": [
-      "@typescript-eslint",
-      "react-refresh"
-    ],
-    "rules": {
-      "react-refresh/only-export-components": [
-        "warn",
-        { "allowConstantExport": true }
-      ],
-      "@typescript-eslint/no-unused-vars": [
-        "error",
-        { "argsIgnorePattern": "^_" }
-      ],
-      "@typescript-eslint/explicit-function-return-type": "warn",
-      "@typescript-eslint/no-explicit-any": "warn"
-    },
-    "ignorePatterns": [
-      "dist",
-      ".eslintrc.cjs",
-      "vite.config.ts"
-    ]
   }
 }

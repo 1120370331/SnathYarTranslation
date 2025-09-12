@@ -1,0 +1,4 @@
+[console_scripts]
+dictionary-reader = dictionary_reader.cli:dictionary_cli
+rate-limit = rate_limiter.cli:rate_limit_cli
+shathyar-translate = shathyar_translator.cli:translate_cli
