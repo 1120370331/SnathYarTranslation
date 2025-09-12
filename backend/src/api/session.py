@@ -36,10 +36,7 @@ class QuotaExtensionRequest(BaseModel):
     reason: Optional[str] = "Admin quota extension"
 
 
-def get_db_session() -> Session:
-    """Get database session (dependency injection)"""
-    # Mock for now - would return actual SQLAlchemy session
-    pass
+from ..db import get_db_session  # Real SQLAlchemy Session provider
 
 
 def get_client_ip(request: Request) -> str:

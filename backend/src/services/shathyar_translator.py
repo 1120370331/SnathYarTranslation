@@ -14,6 +14,8 @@ from enum import Enum
 
 from ..models.translation_entry import TranslationEntry
 from ..models.official_dictionary import OfficialDictionary
+import re
+import string
 
 
 class TranslationSource(Enum):
@@ -95,6 +97,149 @@ class ShathyarTranslator:
             return await self._translate_chinese_to_shathyar(text)
         else:
             return await self._translate_shathyar_to_chinese(text)
+
+    # Lookup-only path used by API to avoid consuming quota when a result
+    # already exists in dictionary or cache. Never calls AI client or writes.
+    def lookup_without_ai(self, text: str, source_language: str) -> Optional[TranslationResult]:
+        if not text or not text.strip():
+            return None
+        text = text.strip()
+        if source_language == 'shathyar':
+            # Dictionary exact
+            dictionary_entry = self._find_dictionary_match(text, 'shathyar')
+            if dictionary_entry:
+                return TranslationResult(
+                    translated_text=dictionary_entry.origin_cn,
+                    source_text=text,
+                    source=TranslationSource.DICTIONARY,
+                    is_cached=True,
+                    is_ai_generated=False,
+                    can_edit=False,
+                    confidence_score=1.0,
+                    translation_id=f"dict_{dictionary_entry.id}"
+                )
+            # Dictionary fuzzy
+            fuzzy_dict_entry = self._find_dictionary_fuzzy_shathyar(text)
+            if fuzzy_dict_entry:
+                return TranslationResult(
+                    translated_text=fuzzy_dict_entry.origin_cn,
+                    source_text=text,
+                    source=TranslationSource.DICTIONARY,
+                    is_cached=True,
+                    is_ai_generated=False,
+                    can_edit=False,
+                    confidence_score=0.99,
+                    translation_id=f"dict_{fuzzy_dict_entry.id}"
+                )
+            # Cache direct exact
+            cached = self._find_cached_translation(text, 'shathyar')
+            if cached:
+                return TranslationResult(
+                    translated_text=cached.translated_text,
+                    source_text=text,
+                    source=TranslationSource.CACHE,
+                    is_cached=True,
+                    is_ai_generated=cached.is_ai_generated,
+                    can_edit=False,
+                    confidence_score=cached.confidence_score,
+                    translation_id=cached.id
+                )
+            # Cache direct fuzzy
+            cached_fuzzy = self._find_cached_fuzzy_shathyar(text)
+            if cached_fuzzy:
+                return TranslationResult(
+                    translated_text=cached_fuzzy.translated_text,
+                    source_text=text,
+                    source=TranslationSource.CACHE,
+                    is_cached=True,
+                    is_ai_generated=cached_fuzzy.is_ai_generated,
+                    can_edit=False,
+                    confidence_score=cached_fuzzy.confidence_score,
+                    translation_id=cached_fuzzy.id
+                )
+            # Reverse cache exact
+            rev = self._find_reverse_cached_exact_shathyar(text)
+            if rev:
+                return TranslationResult(
+                    translated_text=rev.source_text,
+                    source_text=text,
+                    source=TranslationSource.CACHE,
+                    is_cached=True,
+                    is_ai_generated=rev.is_ai_generated,
+                    can_edit=False,
+                    confidence_score=rev.confidence_score,
+                    translation_id=rev.id
+                )
+            # Reverse cache fuzzy
+            rev_fuzzy = self._find_reverse_cached_fuzzy_shathyar(text)
+            if rev_fuzzy:
+                return TranslationResult(
+                    translated_text=rev_fuzzy.source_text,
+                    source_text=text,
+                    source=TranslationSource.CACHE,
+                    is_cached=True,
+                    is_ai_generated=rev_fuzzy.is_ai_generated,
+                    can_edit=False,
+                    confidence_score=rev_fuzzy.confidence_score,
+                    translation_id=rev_fuzzy.id
+                )
+            return None
+        elif source_language == 'chinese':
+            # Cache exact
+            cached = self._find_cached_translation(text, 'chinese')
+            if cached:
+                return TranslationResult(
+                    translated_text=cached.translated_text,
+                    source_text=text,
+                    source=TranslationSource.CACHE,
+                    is_cached=True,
+                    is_ai_generated=cached.is_ai_generated,
+                    can_edit=False,
+                    confidence_score=cached.confidence_score,
+                    translation_id=cached.id
+                )
+            # Cache fuzzy
+            cached_fuzzy = self._find_cached_fuzzy_chinese(text)
+            if cached_fuzzy:
+                return TranslationResult(
+                    translated_text=cached_fuzzy.translated_text,
+                    source_text=text,
+                    source=TranslationSource.CACHE,
+                    is_cached=True,
+                    is_ai_generated=cached_fuzzy.is_ai_generated,
+                    can_edit=False,
+                    confidence_score=cached_fuzzy.confidence_score,
+                    translation_id=cached_fuzzy.id
+                )
+            # Dictionary exact
+            dict_exact = self._find_dictionary_match(text, 'chinese')
+            if dict_exact:
+                return TranslationResult(
+                    translated_text=dict_exact.shathyar,
+                    source_text=text,
+                    source=TranslationSource.DICTIONARY,
+                    is_cached=True,
+                    is_ai_generated=False,
+                    can_edit=False,
+                    confidence_score=1.0,
+                    translation_id=f"dict_{dict_exact.id}"
+                )
+            # Dictionary fuzzy
+            dict_fuzzy = self._find_dictionary_fuzzy_chinese(text)
+            if dict_fuzzy:
+                return TranslationResult(
+                    translated_text=dict_fuzzy.shathyar,
+                    source_text=text,
+                    source=TranslationSource.DICTIONARY,
+                    is_cached=True,
+                    is_ai_generated=False,
+                    can_edit=False,
+                    confidence_score=0.99,
+                    translation_id=f"dict_{dict_fuzzy.id}"
+                )
+            return None
+        else:
+            return None
     
     async def _translate_chinese_to_shathyar(self, chinese_text: str) -> TranslationResult:
         """Translate Chinese to Shathyar with caching and AI generation"""
@@ -115,9 +260,50 @@ class ShathyarTranslator:
                 confidence_score=cached_entry.confidence_score,
                 translation_id=cached_entry.id
             )
+
+        # Step 1.5: Fuzzy cache match (punctuation forgiveness)
+        fuzzy_cached_entry = self._find_cached_fuzzy_chinese(chinese_text)
+        if fuzzy_cached_entry:
+            fuzzy_cached_entry.increment_usage()
+            self.db_session.commit()
+            return TranslationResult(
+                translated_text=fuzzy_cached_entry.translated_text,
+                source_text=chinese_text,
+                source=TranslationSource.CACHE,
+                is_cached=True,
+                is_ai_generated=fuzzy_cached_entry.is_ai_generated,
+                can_edit=False,
+                confidence_score=fuzzy_cached_entry.confidence_score,
+                translation_id=fuzzy_cached_entry.id
+            )
         
-        # Step 2: Check official dictionary (not for Chinese→Shathyar, but for consistency)
-        # Official dictionary is primarily for Shathyar→Chinese lookup
+        # Step 2: Check official dictionary (Chinese → Shathyar using dictionary pair)
+        dict_exact = self._find_dictionary_match(chinese_text, "chinese")
+        if dict_exact:
+            return TranslationResult(
+                translated_text=dict_exact.shathyar,
+                source_text=chinese_text,
+                source=TranslationSource.DICTIONARY,
+                is_cached=True,
+                is_ai_generated=False,
+                can_edit=False,
+                confidence_score=1.0,
+                translation_id=f"dict_{dict_exact.id}"
+            )
+
+        # Step 2.5: Fuzzy dictionary match (punctuation forgiveness)
+        dict_fuzzy = self._find_dictionary_fuzzy_chinese(chinese_text)
+        if dict_fuzzy:
+            return TranslationResult(
+                translated_text=dict_fuzzy.shathyar,
+                source_text=chinese_text,
+                source=TranslationSource.DICTIONARY,
+                is_cached=True,
+                is_ai_generated=False,
+                can_edit=False,
+                confidence_score=0.99,
+                translation_id=f"dict_{dict_fuzzy.id}"
+            )
         
         # Step 3: Generate AI translation (FR-005)
         try:
@@ -170,7 +356,21 @@ class ShathyarTranslator:
                 translation_id=f"dict_{dictionary_entry.id}"
             )
         
-        # Step 2: Check user database cache
+        # Step 1.5: Fuzzy dictionary match with punctuation forgiveness
+        fuzzy_dict_entry = self._find_dictionary_fuzzy_shathyar(shathyar_text)
+        if fuzzy_dict_entry:
+            return TranslationResult(
+                translated_text=fuzzy_dict_entry.origin_cn,
+                source_text=shathyar_text,
+                source=TranslationSource.DICTIONARY,
+                is_cached=True,
+                is_ai_generated=False,
+                can_edit=False,
+                confidence_score=0.99,
+                translation_id=f"dict_{fuzzy_dict_entry.id}"
+            )
+        
+        # Step 2: Check user database cache (direct shathyar-source entries)
         cached_entry = self._find_cached_translation(shathyar_text, "shathyar")
         if cached_entry:
             cached_entry.increment_usage()
@@ -185,6 +385,53 @@ class ShathyarTranslator:
                 can_edit=False,
                 confidence_score=cached_entry.confidence_score,
                 translation_id=cached_entry.id
+            )
+        
+        # Step 2.5: Fuzzy cache match with punctuation forgiveness (direct shathyar-source entries)
+        fuzzy_cached_entry = self._find_cached_fuzzy_shathyar(shathyar_text)
+        if fuzzy_cached_entry:
+            fuzzy_cached_entry.increment_usage()
+            self.db_session.commit()
+            return TranslationResult(
+                translated_text=fuzzy_cached_entry.translated_text,
+                source_text=shathyar_text,
+                source=TranslationSource.CACHE,
+                is_cached=True,
+                is_ai_generated=fuzzy_cached_entry.is_ai_generated,
+                can_edit=False,
+                confidence_score=fuzzy_cached_entry.confidence_score,
+                translation_id=fuzzy_cached_entry.id
+            )
+
+        # Step 2.6: Reverse lookup in user cache: entries where source_language='chinese'
+        reverse_entry = self._find_reverse_cached_exact_shathyar(shathyar_text)
+        if reverse_entry:
+            reverse_entry.increment_usage()
+            self.db_session.commit()
+            return TranslationResult(
+                translated_text=reverse_entry.source_text,
+                source_text=shathyar_text,
+                source=TranslationSource.CACHE,
+                is_cached=True,
+                is_ai_generated=reverse_entry.is_ai_generated,
+                can_edit=False,
+                confidence_score=reverse_entry.confidence_score,
+                translation_id=reverse_entry.id
+            )
+
+        reverse_fuzzy = self._find_reverse_cached_fuzzy_shathyar(shathyar_text)
+        if reverse_fuzzy:
+            reverse_fuzzy.increment_usage()
+            self.db_session.commit()
+            return TranslationResult(
+                translated_text=reverse_fuzzy.source_text,
+                source_text=shathyar_text,
+                source=TranslationSource.CACHE,
+                is_cached=True,
+                is_ai_generated=reverse_fuzzy.is_ai_generated,
+                can_edit=False,
+                confidence_score=reverse_fuzzy.confidence_score,
+                translation_id=reverse_fuzzy.id
             )
         
         # Step 3: No match found (FR-009)
@@ -244,15 +491,82 @@ class ShathyarTranslator:
         ).first()
     
     def _find_dictionary_match(self, text: str, language: str) -> Optional[OfficialDictionary]:
-        """Find exact match in official dictionary"""
+        """Find normalized exact match in official dictionary (punctuation forgiveness only)."""
+        target_norm = self._normalize_for_match(text)
         if language == "chinese":
             return self.db_session.query(OfficialDictionary).filter(
-                OfficialDictionary.origin_cn.ilike(f"%{text}%")
+                OfficialDictionary.norm_origin_cn == target_norm
             ).first()
         else:  # shathyar
             return self.db_session.query(OfficialDictionary).filter(
-                OfficialDictionary.shathyar.ilike(f"%{text}%")
+                OfficialDictionary.norm_shathyar == target_norm
             ).first()
+
+    # --- Fuzzy helpers (punctuation forgiveness) ---
+    _punct_table = str.maketrans('', '', string.punctuation + '，。！？；：、“”‘’、（）【】《》〈〉—…·· ' + "'\"\t\n\r")
+
+    @classmethod
+    def _normalize_for_match(cls, s: str) -> str:
+        """Lowercase and remove punctuation/whitespace for forgiving comparisons."""
+        if not s:
+            return ''
+        # Lower and strip then remove punctuation and spaces (incl. Chinese punct.)
+        lowered = s.lower().strip()
+        # Remove common punctuation (including apostrophes) and whitespace
+        cleaned = lowered.translate(cls._punct_table)
+        # Collapse any residual multiple spaces (should be none after translate)
+        return cleaned
+
+    def _find_dictionary_fuzzy_shathyar(self, shathyar_text: str) -> Optional[OfficialDictionary]:
+        target_norm = self._normalize_for_match(shathyar_text)
+        if not target_norm:
+            return None
+        return self.db_session.query(OfficialDictionary).filter(
+            OfficialDictionary.norm_shathyar == target_norm
+        ).first()
+
+    def _find_cached_fuzzy_shathyar(self, shathyar_text: str) -> Optional[TranslationEntry]:
+        target_norm = self._normalize_for_match(shathyar_text)
+        if not target_norm:
+            return None
+        return self.db_session.query(TranslationEntry).filter(
+            TranslationEntry.source_language == 'shathyar',
+            TranslationEntry.norm_source_text == target_norm
+        ).first()
+
+    def _find_reverse_cached_exact_shathyar(self, shathyar_text: str) -> Optional[TranslationEntry]:
+        """Find reverse user cache where CN→SH entry matches given SH text exactly (normalized)."""
+        target_norm = self._normalize_for_match(shathyar_text)
+        return self.db_session.query(TranslationEntry).filter(
+            TranslationEntry.source_language == 'chinese',
+            TranslationEntry.norm_translated_text == target_norm
+        ).first()
+
+    def _find_reverse_cached_fuzzy_shathyar(self, shathyar_text: str) -> Optional[TranslationEntry]:
+        target_norm = self._normalize_for_match(shathyar_text)
+        if not target_norm:
+            return None
+        return self.db_session.query(TranslationEntry).filter(
+            TranslationEntry.source_language == 'chinese',
+            TranslationEntry.norm_translated_text == target_norm
+        ).first()
+
+    def _find_dictionary_fuzzy_chinese(self, chinese_text: str) -> Optional[OfficialDictionary]:
+        target_norm = self._normalize_for_match(chinese_text)
+        if not target_norm:
+            return None
+        return self.db_session.query(OfficialDictionary).filter(
+            OfficialDictionary.norm_origin_cn == target_norm
+        ).first()
+
+    def _find_cached_fuzzy_chinese(self, chinese_text: str) -> Optional[TranslationEntry]:
+        target_norm = self._normalize_for_match(chinese_text)
+        if not target_norm:
+            return None
+        return self.db_session.query(TranslationEntry).filter(
+            TranslationEntry.source_language == 'chinese',
+            TranslationEntry.norm_source_text == target_norm
+        ).first()
 
 
 # Custom exceptions

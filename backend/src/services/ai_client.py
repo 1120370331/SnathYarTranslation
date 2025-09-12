@@ -10,6 +10,7 @@ import aiohttp
 import click
 import json
 import time
+import os
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
@@ -78,6 +79,12 @@ class AIClient:
         self.successful_requests = 0
         self.failed_requests = 0
         self.total_tokens_used = 0
+        
+        # HTTP session (reused for keep-alive to reduce latency)
+        timeout_val = int(os.getenv('SHATHYAR_AI_TIMEOUT', self.circuit_config.request_timeout))
+        self._timeout = aiohttp.ClientTimeout(total=timeout_val)
+        self._connector = aiohttp.TCPConnector(limit=100, ssl=False, ttl_dns_cache=300)
+        self._session: Optional[aiohttp.ClientSession] = None
         
     async def translate_chinese_to_shathyar(self, chinese_text: str, 
                                           dictionary_context: Dict = None) -> AIResponse:
@@ -203,13 +210,17 @@ class AIClient:
         
         self.total_requests += 1
         
+        scheme = os.getenv('SHATHYAR_AI_AUTH_SCHEME', 'Bearer')
+        auth_value = f"{scheme} {self.api_key}" if scheme else self.api_key
         headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
+            "Authorization": auth_value,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
         }
         
+        model = os.getenv('SHATHYAR_AI_MODEL') or 'doubao-seed-1-6-thinking-250715'
         payload = {
-            "model": "doubao-pro-4k",  # Volcengine model
+            "model": model,
             "messages": [
                 {
                     "role": "system",
@@ -225,18 +236,28 @@ class AIClient:
             "top_p": 0.9
         }
         
-        timeout = aiohttp.ClientTimeout(total=self.circuit_config.request_timeout)
-        
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.post(f"{self.base_url}/chat/completions", 
-                                  headers=headers, 
-                                  json=payload) as response:
-                
-                if response.status != 200:
-                    error_text = await response.text()
-                    raise AIServiceError(f"API request failed: {response.status} - {error_text}")
-                
-                return await response.json()
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession(timeout=self._timeout, connector=self._connector)
+
+        base = self.base_url.rstrip('/')
+        candidates = [
+            f"{base}/chat/completions",
+            f"{base}/v1/chat/completions",
+            f"{base}/openai/v1/chat/completions",
+        ]
+        last_error_text = None
+        for url in candidates:
+            async with self._session.post(url, headers=headers, json=payload) as response:
+                if response.status == 200:
+                    return await response.json()
+                # Try next candidate on 404/405 path errors
+                if response.status in (404, 405):
+                    last_error_text = await response.text()
+                    continue
+                error_text = await response.text()
+                raise AIServiceError(f"API request failed: {response.status} - {error_text}")
+        # If all candidates failed with 404/405
+        raise AIServiceError(f"API request failed: 404 - {last_error_text or 'Not Found'}")
     
     def _build_chinese_to_shathyar_prompt(self, chinese_text: str, 
                                         dictionary_context: Dict = None) -> str:
@@ -293,13 +314,32 @@ Requirements:
         
         if dictionary_context and dictionary_context.get("sample_entries"):
             context_examples = []
-            for entry in dictionary_context["sample_entries"][:5]:
+            for entry in dictionary_context["sample_entries"]:
                 context_examples.append(f"Shathyar: {entry['shathyar']} → Chinese: {entry['origin_cn']}")
             
             if context_examples:
                 base_prompt += f"\n\nReference examples:\n" + "\n".join(context_examples)
         
         return base_prompt
+
+    async def close(self):
+        try:
+            if self._session and not self._session.closed:
+                await self._session.close()
+        except Exception:
+            pass
+
+    def __del__(self):
+        # Best-effort close (in case event loop is still running)
+        try:
+            if self._session and not self._session.closed:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    loop.create_task(self.close())
+                else:
+                    loop.run_until_complete(self.close())
+        except Exception:
+            pass
     
     def _parse_translation_response(self, response: Dict, source_text: str, 
                                   start_time: float) -> AIResponse:

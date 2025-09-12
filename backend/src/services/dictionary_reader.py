@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
 from sqlalchemy.orm import Session
+from ..utils.normalize import normalize_text
 
 from ..models.official_dictionary import OfficialDictionary
 
@@ -109,7 +110,8 @@ class DictionaryReader:
                 
                 # Expected column names (flexible matching)
                 cn_columns = ['origin_cn', 'chinese', 'cn', '中文']
-                shathyar_columns = ['shathyar', 'shath', 'shasiyaer', '沙斯亚尔语']
+                # Accept common variants and the project CSV 'Snathyar'
+                shathyar_columns = ['shathyar', 'snathyar', 'shath', 'shasiyaer', '沙斯亚尔语']
                 en_columns = ['origin_en', 'english', 'en', '英文']
                 
                 # Find actual column names
@@ -198,13 +200,12 @@ class DictionaryReader:
         if not search_text or not search_text.strip():
             return []
         
-        search_text = search_text.strip()
+        norm = normalize_text(search_text)
         query = self.db_session.query(OfficialDictionary)
-        
         if exact_match:
-            query = query.filter(OfficialDictionary.origin_cn == search_text)
+            query = query.filter(OfficialDictionary.norm_origin_cn == norm)
         else:
-            query = query.filter(OfficialDictionary.origin_cn.contains(search_text))
+            query = query.filter(OfficialDictionary.norm_origin_cn.like(f"%{norm}%"))
         
         return query.limit(limit).all()
     
@@ -224,13 +225,12 @@ class DictionaryReader:
         if not search_text or not search_text.strip():
             return []
         
-        search_text = search_text.strip()
+        norm = normalize_text(search_text)
         query = self.db_session.query(OfficialDictionary)
-        
         if exact_match:
-            query = query.filter(OfficialDictionary.shathyar == search_text)
+            query = query.filter(OfficialDictionary.norm_shathyar == norm)
         else:
-            query = query.filter(OfficialDictionary.shathyar.contains(search_text))
+            query = query.filter(OfficialDictionary.norm_shathyar.like(f"%{norm}%"))
         
         return query.limit(limit).all()
     

@@ -30,6 +30,7 @@ export const TranslationResult: React.FC<TranslationResultProps> = ({
   const [editedText, setEditedText] = useState(result.translated_text);
   const [isSaving, setIsSaving] = useState(false);
   const [isCopying, setIsCopying] = useState(false);
+  const [isCopyingWithOriginal, setIsCopyingWithOriginal] = useState(false);
   const confirmTranslation = useConfirmTranslation();
 
   // Handle edit mode toggle
@@ -119,6 +120,37 @@ export const TranslationResult: React.FC<TranslationResultProps> = ({
     }
   }, [result, confirmTranslation, onTranslationConfirmed]);
 
+  // Handle copy translation + original
+  const handleCopyWithOriginal = useCallback(async () => {
+    setIsCopyingWithOriginal(true);
+    try {
+      const composite = `${result.translated_text}（${result.source_text}）`;
+      await navigator.clipboard.writeText(composite);
+      toast.success('已复制：译文（原文） / Copied: Translation (Original)', {
+        icon: '📋+',
+        style: {
+          background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+          color: '#f0f0f5',
+          border: '1px solid #4a5568',
+          borderRadius: '8px',
+        }
+      });
+    } catch (error) {
+      console.error('Failed to copy with original:', error);
+      toast.error('复制失败 / Copy failed', {
+        icon: '❌',
+        style: {
+          background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+          color: '#f0f0f5',
+          border: '1px solid #4a5568',
+          borderRadius: '8px',
+        }
+      });
+    } finally {
+      setIsCopyingWithOriginal(false);
+    }
+  }, [result.translated_text, result.source_text]);
+
   // Handle cancel editing
   const handleCancelEdit = useCallback(() => {
     setIsEditing(false);
@@ -179,23 +211,17 @@ export const TranslationResult: React.FC<TranslationResultProps> = ({
 
   // Get source badge text and styling
   const getSourceBadge = () => {
-    if (!result.is_ai_generated) {
+    // 正语: 官方词典命中（非AI且缓存）
+    if (!result.is_ai_generated && result.is_cached) {
       return {
-        text: '官方词典 / Official Dictionary',
-        className: 'bg-green-600 text-green-100'
+        text: '正语',
+        className: 'bg-purple-500 text-purple-100'
       };
     }
-    
-    if (result.is_cached) {
-      return {
-        text: '缓存结果 / Cached Result',
-        className: 'bg-blue-600 text-blue-100'
-      };
-    }
-    
+    // 衍生语: 系统命中（缓存或自动生成）
     return {
-      text: 'AI 生成 / AI Generated',
-      className: 'bg-purple-600 text-purple-100'
+      text: '衍生语',
+      className: result.is_cached ? 'bg-cyan-600 text-cyan-100' : 'bg-cyan-600 text-cyan-100'
     };
   };
 
@@ -270,7 +296,15 @@ export const TranslationResult: React.FC<TranslationResultProps> = ({
           </div>
         ) : (
           <div className="p-4 bg-mystical-darker rounded-md border border-mystical-border">
-            <p className="text-mystical-text font-mystical text-lg break-words leading-relaxed">
+            <p
+              className={
+                `font-mystical text-lg break-words leading-relaxed ` +
+                (result.is_ai_generated || !result.is_cached
+                  ? 'text-mystical-text'
+                  : 'text-purple-300 italic font-bold')
+              }
+              title={(!result.is_ai_generated && result.is_cached) ? '正语' : undefined}
+            >
               {result.translated_text}
             </p>
           </div>
@@ -330,6 +364,26 @@ export const TranslationResult: React.FC<TranslationResultProps> = ({
                 </>
               )}
             </button>
+
+            {/* Copy translation with original */}
+            <button
+              onClick={handleCopyWithOriginal}
+              disabled={isCopyingWithOriginal}
+              className="mystical-button-outline px-4 py-2 rounded-md font-medium border-2 border-mystical-accent text-mystical-accent hover:bg-mystical-accent hover:text-mystical-dark transition-all duration-300 flex items-center"
+              data-testid="copy-with-original-btn"
+            >
+              {isCopyingWithOriginal ? (
+                <>
+                  <div className="animate-spin w-4 h-4 border-2 border-current border-t-transparent rounded-full mr-2"></div>
+                  复制中...
+                </>
+              ) : (
+                <>
+                  <span className="mr-2">📋+</span>
+                  复制含原文 / Copy with Original
+                </>
+              )}
+            </button>
             
             {/* Direct save button - for AI generated translations */}
             {result.can_edit && result.is_ai_generated && !result.is_cached && result.translation_id && (
@@ -367,11 +421,11 @@ export const TranslationResult: React.FC<TranslationResultProps> = ({
         )}
       </div>
 
-      {/* Usage note for AI translations */}
+      {/* Usage note for auto-generated translations */}
       {result.is_ai_generated && !result.is_cached && (
         <div className="mt-4 p-3 bg-mystical-darker rounded-md border border-mystical-border">
           <p className="text-xs text-mystical-muted font-mystical">
-            ⚡ AI 翻译结果仅供参考，建议人工校对后确认 / AI translation for reference only, manual review recommended
+            ⚡ 自动生成结果仅供参考，建议人工校对后确认 / Auto-generated translation for reference only; manual review recommended
           </p>
         </div>
       )}

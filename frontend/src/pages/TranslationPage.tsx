@@ -5,10 +5,11 @@
  * with beautiful mystical UI and proper PRD compliance
  */
 
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { TranslationForm } from '../components/TranslationForm'
 import { MagicPowerIndicator } from '../components/MagicPowerIndicator'
 import toast from 'react-hot-toast'
+import { apiClient } from '../services/api-client'
 
 const TranslationPage: React.FC = () => {
   const [magicPower, setMagicPower] = useState({
@@ -17,28 +18,58 @@ const TranslationPage: React.FC = () => {
     resetTime: undefined as string | undefined
   })
 
-  const handleTranslationComplete = (result: any) => {
-    // Update magic power from translation result
-    if (result.magic_power_remaining !== undefined) {
-      setMagicPower(prev => ({
-        ...prev,
-        remaining: result.magic_power_remaining
-      }))
-    }
+  // Initialize magic power from backend (or local fallback) on mount
+  useEffect(() => {
+    let mounted = true
+    apiClient.getQuota().then(q => {
+      if (!mounted) return
+      setMagicPower({
+        remaining: q.tokens_remaining,
+        total: q.daily_limit,
+        resetTime: q.reset_time,
+      })
+    }).catch(() => {/* handled inside apiClient via fallback */})
+    return () => { mounted = false }
+  }, [])
 
-    // Show success toast with mystical styling
-    toast.success(
-      `翻译完成！剩余魔力: ${result.magic_power_remaining || magicPower.remaining} / Translation complete! Remaining power: ${result.magic_power_remaining || magicPower.remaining}`,
-      {
-        icon: '✨',
-        style: {
-          background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
-          color: '#f0f0f5',
-          border: '1px solid #4a5568',
-          borderRadius: '8px',
+  const handleTranslationComplete = (result: any) => {
+    const prevRemaining = magicPower.remaining
+    const nextRemaining = result.magic_power_remaining ?? prevRemaining
+
+    // Update magic power from translation result
+    setMagicPower(prev => ({
+      ...prev,
+      remaining: nextRemaining
+    }))
+
+    // If quota unchanged, show "no deduction" mystical toast; else normal success
+    if (nextRemaining === prevRemaining) {
+      toast(
+        '📜 卷轴与古老的知识产生了共鸣，本次不消耗魔力值……',
+        {
+          icon: '✨',
+          style: {
+            background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+            color: '#f0f0f5',
+            border: '1px solid #4a5568',
+            borderRadius: '8px',
+          }
         }
-      }
-    )
+      )
+    } else {
+      toast.success(
+        `翻译完成！剩余魔力: ${nextRemaining} / Translation complete! Remaining power: ${nextRemaining}`,
+        {
+          icon: '✨',
+          style: {
+            background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+            color: '#f0f0f5',
+            border: '1px solid #4a5568',
+            borderRadius: '8px',
+          }
+        }
+      )
+    }
   }
 
   return (
@@ -73,10 +104,6 @@ const TranslationPage: React.FC = () => {
             <p className="text-xl text-mystical-text font-mystical leading-relaxed mb-4">
               欢迎来到沙斯亚尔语翻译门户。
             </p>
-            <p className="text-lg text-mystical-muted font-mystical italic">
-              Welcome to the mystical Shathyar translation portal. Here, Chinese meets the ancient Void language, 
-              with AI and ancient wisdom bridging languages as you explore the mysteries of the endless abyss.
-            </p>
           </div>
         </div>
 
@@ -89,7 +116,7 @@ const TranslationPage: React.FC = () => {
                 魔力法阵 / Magic Circle
               </h3>
             </div>
-            <MagicPowerIndicator 
+            <MagicPowerIndicator
               remaining={magicPower.remaining}
               total={magicPower.total}
               resetTime={magicPower.resetTime}
@@ -114,8 +141,8 @@ const TranslationPage: React.FC = () => {
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
           <div className="mystical-card rounded-xl p-6 text-center">
             <div className="text-4xl mystical-icon mb-4">🧠</div>
-            <h4 className="text-lg font-bold font-mystical text-mystical-text mb-2">AI翻译</h4>
-            <p className="text-sm text-mystical-muted font-mystical">智能沙斯亚尔语生成</p>
+            <h4 className="text-lg font-bold font-mystical text-mystical-text mb-2">自动翻译</h4>
+            <p className="text-sm text-mystical-muted font-mystical">自动生成沙斯亚尔语</p>
           </div>
           
           <div className="mystical-card rounded-xl p-6 text-center">
@@ -133,7 +160,7 @@ const TranslationPage: React.FC = () => {
           <div className="mystical-card rounded-xl p-6 text-center">
             <div className="text-4xl mystical-icon mb-4">💾</div>
             <h4 className="text-lg font-bold font-mystical text-mystical-text mb-2">自动保存</h4>
-            <p className="text-sm text-mystical-muted font-mystical">智能缓存积累词库</p>
+            <p className="text-sm text-mystical-muted font-mystical">自动缓存积累词库</p>
           </div>
         </div>
 
@@ -154,8 +181,8 @@ const TranslationPage: React.FC = () => {
                   中文 → 沙斯亚尔语
                 </h4>
                 <ul className="space-y-2 text-mystical-muted font-mystical text-sm">
-                  <li className="flex items-center"><span className="text-green-400 mr-2">✓</span> AI驱动的智能翻译生成</li>
-                  <li className="flex items-center"><span className="text-green-400 mr-2">✓</span> 基于官方词典语言学习</li>
+                  <li className="flex items-center"><span className="text-green-400 mr-2">✓</span> 快速生成近似沙斯亚尔语</li>
+                  <li className="flex items-center"><span className="text-green-400 mr-2">✓</span> 参考官方词典语料</li>
                   <li className="flex items-center"><span className="text-green-400 mr-2">✓</span> 支持用户编辑和确认</li>
                   <li className="flex items-center"><span className="text-green-400 mr-2">✓</span> 自动缓存提高效率</li>
                   <li className="flex items-center"><span className="text-yellow-400 mr-2">⚡</span> 消耗1点魔力值</li>
@@ -191,10 +218,10 @@ const TranslationPage: React.FC = () => {
               <div className="mystical-card rounded-lg p-4">
                 <h4 className="text-lg font-bold font-mystical text-mystical-text mb-3">快捷功能 / Quick Features</h4>
                 <ul className="space-y-2 text-mystical-muted font-mystical text-sm">
-                  <li>• 🔄 可编辑AI翻译结果</li>
+                  <li>• 🔄 可编辑翻译结果</li>
                   <li>• 💾 一键确认并保存</li>
                   <li>• 📋 自动复制到剪贴板</li>
-                  <li>• 🎯 智能翻译建议</li>
+                  <li>• 🎯 翻译建议</li>
                 </ul>
               </div>
             </div>
@@ -225,7 +252,7 @@ const TranslationPage: React.FC = () => {
               🌟 沙斯亚尔语翻译器 v1.0.1 | 由古老虚空魔法驱动 
               <br />
               <span className="text-xs opacity-70">
-                Powered by Ancient Void Magic • Built with AI & Love
+                Powered by Ancient Void Magic • Crafted with Care
               </span>
             </p>
           </div>

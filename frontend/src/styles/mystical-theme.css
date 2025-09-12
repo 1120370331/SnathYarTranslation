@@ -74,10 +74,16 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background-image: 
-    radial-gradient(circle at 20% 20%, rgba(124, 58, 237, 0.1) 0%, transparent 50%),
-    radial-gradient(circle at 80% 80%, rgba(212, 175, 55, 0.05) 0%, transparent 50%),
-    radial-gradient(circle at 40% 90%, rgba(59, 130, 246, 0.05) 0%, transparent 50%);
+  /* Layered background: image + mystical radial overlays */
+  background-image:
+    url('/resources/bg1.webp'),
+    radial-gradient(circle at 20% 20%, rgba(124, 58, 237, 0.10) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(212, 175, 55, 0.06) 0%, transparent 50%),
+    radial-gradient(circle at 40% 90%, rgba(59, 130, 246, 0.06) 0%, transparent 50%);
+  background-size: cover, auto, auto, auto;
+  background-position: center center, 20% 20%, 80% 80%, 40% 90%;
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat;
+  background-attachment: fixed, fixed, fixed, fixed;
   pointer-events: none;
   z-index: -1;
 }

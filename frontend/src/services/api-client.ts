@@ -116,15 +116,45 @@ export const apiClient = {
       // Backend returns the authoritative remaining power
       return data
     } catch (err) {
+      // If backend responded with an error, propagate it so UI can show proper message
+      if (axios.isAxiosError(err) && err.response) {
+        const msg = (err.response.data && (err.response.data.error || err.response.data.detail)) || '翻译失败'
+        throw new Error(msg)
+      }
+      // Optionally disable fallback in development via Vite env
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
+      if (import.meta?.env?.VITE_DISABLE_FALLBACK === 'true') {
+        throw new Error('后端不可用 / Backend unreachable')
+      }
       // Fallback: simulate with local quota so refresh doesn't reset
+      const raw = localStorage.getItem('shathyar_cache_v1')
+      const cache: Record<string, string> = raw ? JSON.parse(raw) : {}
       if (req.source_language === 'chinese') {
+        // 1) If we already have a cached mapping, return it without consuming
+        const existing = cache[req.text]
+        if (existing) {
+          return {
+            translated_text: existing,
+            source_text: req.text,
+            is_cached: true,
+            is_ai_generated: true,
+            can_edit: false,
+            translation_id: 'local_cache',
+            magic_power_remaining: getLocalQuota().tokens_remaining,
+            source: 'cache',
+          }
+        }
+        // 2) Otherwise generate once, store mapping, and consume quota
         const q = consumeLocalToken()
         if (q.tokens_remaining < 0) {
-          const quota = getLocalQuota()
           throw new Error('魔力耗尽，请等待重置 / Magic power exhausted, please wait for reset')
         }
+        const gen = generateShathyar(req.text)
+        cache[req.text] = gen
+        try { localStorage.setItem('shathyar_cache_v1', JSON.stringify(cache)) } catch {}
         return {
-          translated_text: generateShathyar(req.text),
+          translated_text: gen,
           source_text: req.text,
           is_cached: false,
           is_ai_generated: true,
@@ -135,16 +165,22 @@ export const apiClient = {
           source: 'ai_generated',
         }
       } else {
-        // Very naive dictionary fallback
-        return {
-          translated_text: '破译失败…… / Decryption failed…',
-          source_text: req.text,
-          is_cached: false,
-          is_ai_generated: false,
-          can_edit: false,
-          magic_power_remaining: getLocalQuota().tokens_remaining,
-          source: 'cache',
+        // Reverse lookup from local cache: find CN where value equals SH
+        const entry = Object.entries(cache).find(([, sh]) => sh === req.text)
+        if (entry) {
+          const [cn] = entry
+          return {
+            translated_text: cn,
+            source_text: req.text,
+            is_cached: true,
+            is_ai_generated: true,
+            can_edit: false,
+            magic_power_remaining: getLocalQuota().tokens_remaining,
+            source: 'cache',
+          }
         }
+        // Do not fake a result; bubble up error for UI to show failure
+        throw new Error('破译失败…… / Decryption failed…')
       }
     }
   },
@@ -178,4 +214,3 @@ export const apiClient = {
 }
 
 export type { QuotaStatus as MagicQuota }
-

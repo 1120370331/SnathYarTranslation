@@ -118,3 +118,32 @@ class TestShathyarLookupWorkflow:
             
             if len(long_shathyar) > 500:
                 assert response.status_code == 400
+
+    async def test_shathyar_reverse_lookup_from_user_cache(self):
+        """Shathyar → Chinese should resolve from user-generated cache.
+
+        Workflow:
+        1) Create a CN→SH translation and persist it.
+        2) Use the returned SH text to query SH→CN; expect original CN.
+        """
+        async with httpx.AsyncClient() as client:
+            # Step 1: generate and persist a CN→SH translation
+            cn_text = "这是用户生成的短句"
+            create_resp = await client.post(
+                f"{self.BASE_URL}{self.TRANSLATE_ENDPOINT}",
+                json={"text": cn_text, "source_language": "chinese"}
+            )
+            assert create_resp.status_code in (200, 201)
+            created = create_resp.json()
+            sh_text = created.get("translated_text", "")
+            assert sh_text
+
+            # Step 2: reverse lookup using Shathyar text
+            reverse_resp = await client.post(
+                f"{self.BASE_URL}{self.TRANSLATE_ENDPOINT}",
+                json={"text": sh_text, "source_language": "shathyar"}
+            )
+            assert reverse_resp.status_code == 200
+            reversed_data = reverse_resp.json()
+            assert reversed_data.get("translated_text") == cn_text
+            assert reversed_data.get("is_cached") is True
