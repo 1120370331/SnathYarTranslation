@@ -1,4 +1,5 @@
 pyproject.toml
+src/db.py
 src/main.py
 src/api/dictionary.py
 src/api/session.py
@@ -17,3 +18,4 @@ src/shathyar_translator.egg-info/dependency_links.txt
 src/shathyar_translator.egg-info/entry_points.txt
 src/shathyar_translator.egg-info/requires.txt
 src/shathyar_translator.egg-info/top_level.txt
+src/utils/normalize.py

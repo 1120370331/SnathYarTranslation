@@ -6,9 +6,10 @@ Based on data-model.md specifications.
 """
 
 from datetime import datetime
-from sqlalchemy import Column, String, Integer, DateTime
+from sqlalchemy import Column, String, Integer, DateTime, Index
 from sqlalchemy.sql import func
 from .translation_entry import Base
+from ..utils.normalize import normalize_text
 
 
 class OfficialDictionary(Base):
@@ -35,6 +36,9 @@ class OfficialDictionary(Base):
     origin_en = Column(String(500), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     checksum = Column(String(64), nullable=True)  # SHA256 hash of source file
+    # Normalized columns for efficient fuzzy/forgiving lookups
+    norm_origin_cn = Column(String(600), nullable=True, index=True)
+    norm_shathyar = Column(String(600), nullable=True, index=True)
     
     def __init__(self, origin_cn: str, shathyar: str, origin_en: str = None, checksum: str = None):
         """Initialize dictionary entry with validation"""
@@ -54,6 +58,9 @@ class OfficialDictionary(Base):
         self.shathyar = shathyar.strip()
         self.origin_en = origin_en.strip() if origin_en else None
         self.checksum = checksum
+        # Set normalized fields
+        self.norm_origin_cn = normalize_text(self.origin_cn)
+        self.norm_shathyar = normalize_text(self.shathyar)
     
     def search_chinese(self, search_text: str) -> bool:
         """Check if this entry matches Chinese search text"""
@@ -108,3 +115,7 @@ class OfficialDictionary(Base):
     
     def __repr__(self) -> str:
         return f"<OfficialDictionary(id={self.id}, cn='{self.origin_cn}', shathyar='{self.shathyar}')>"
+
+# Explicit index declarations (composite if needed later)
+Index('idx_official_dictionary_norm_cn', OfficialDictionary.norm_origin_cn)
+Index('idx_official_dictionary_norm_sh', OfficialDictionary.norm_shathyar)

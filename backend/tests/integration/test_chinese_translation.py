@@ -97,6 +97,57 @@ class TestChineseTranslationWorkflow:
                     # Magic power should be the same (cached, doesn't consume quota)
                     assert data2["magic_power_remaining"] == first_magic_power
                     assert data2["is_cached"] is True
+
+    async def test_chinese_translation_fuzzy_cache_punctuation(self):
+        """Chinese → Shathyar fuzzy cache match with punctuation forgiveness"""
+        async with httpx.AsyncClient() as client:
+            # Seed a translation to populate cache
+            payload_exact = {"text": "模糊匹配测试", "source_language": "chinese"}
+            resp1 = await client.post(f"{self.BASE_URL}{self.TRANSLATE_ENDPOINT}", json=payload_exact)
+            assert resp1.status_code in (200, 201)
+            data1 = resp1.json()
+            first_power = data1.get("magic_power_remaining", 0)
+
+            # Variant with extra punctuation (should match cached via punctuation forgiveness)
+            payload_variant = {"text": "模糊匹配测试。", "source_language": "chinese"}
+            resp2 = await client.post(f"{self.BASE_URL}{self.TRANSLATE_ENDPOINT}", json=payload_variant)
+            assert resp2.status_code == 200
+            data2 = resp2.json()
+
+            # Should return cached result and not further consume quota
+            assert data2["is_cached"] is True
+            assert data2["translated_text"] == data1["translated_text"]
+            if "magic_power_remaining" in data2:
+                assert data2["magic_power_remaining"] == first_power
+
+    async def test_chinese_dictionary_lookup_fuzzy_punctuation(self):
+        """Chinese → Shathyar fuzzy dictionary lookup (punctuation forgiveness)
+
+        Note: This test assumes the official dictionary contains a matching
+        Chinese phrase. If not available, this test may be skipped by CI.
+        """
+        async with httpx.AsyncClient() as client:
+            # Common phrase likely to exist in dictionary data
+            base_text = "凝视恩佐斯的内心吧"
+            variant = base_text + "。"  # add a full stop
+
+            # Try dictionary-based translation via CN→SH
+            resp = await client.post(
+                f"{self.BASE_URL}{self.TRANSLATE_ENDPOINT}",
+                json={"text": variant, "source_language": "chinese"}
+            )
+
+            # Accept either success or not-found depending on data availability
+            if resp.status_code == 200:
+                data = resp.json()
+                # Dictionary hits should be cached and not AI-generated
+                assert data.get("is_cached", False) is True
+                assert data.get("is_ai_generated", True) is False
+                assert isinstance(data.get("translated_text", ""), str) and len(data["translated_text"]) > 0
+            elif resp.status_code == 404:
+                # If dictionary doesn't have this phrase in environment, consider acceptable
+                err = resp.json()
+                assert "破译失败" in err.get("error", "") or "translation_not_found" in err.get("error_type", "")
     
     async def test_chinese_translation_input_validation(self):
         """Test input validation for Chinese translation"""

@@ -6,10 +6,11 @@ Based on data-model.md specifications.
 """
 
 from datetime import datetime
-from sqlalchemy import Column, String, Boolean, Numeric, Integer, DateTime
+from sqlalchemy import Column, String, Boolean, Numeric, Integer, DateTime, Index
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
 import uuid
+from ..utils.normalize import normalize_text
 
 Base = declarative_base()
 
@@ -43,6 +44,9 @@ class TranslationEntry(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     usage_count = Column(Integer, default=0)
+    # Normalized columns for fast fuzzy/forgiving lookups
+    norm_source_text = Column(String(1100), nullable=True, index=True)
+    norm_translated_text = Column(String(1100), nullable=True, index=True)
     
     def __init__(self, source_text: str, translated_text: str, source_language: str,
                  is_ai_generated: bool = True, is_user_confirmed: bool = False,
@@ -66,6 +70,9 @@ class TranslationEntry(Base):
         self.is_user_confirmed = is_user_confirmed
         self.confidence_score = confidence_score
         self.usage_count = 0
+        # Set normalized fields
+        self.norm_source_text = normalize_text(self.source_text)
+        self.norm_translated_text = normalize_text(self.translated_text)
     
     def confirm_user_edit(self, edited_translation: str) -> None:
         """Mark translation as user-confirmed with edited content"""
@@ -75,6 +82,7 @@ class TranslationEntry(Base):
         self.translated_text = edited_translation
         self.is_user_confirmed = True
         self.updated_at = datetime.utcnow()
+        self.norm_translated_text = normalize_text(self.translated_text)
     
     def increment_usage(self) -> None:
         """Increment usage counter for analytics"""
@@ -112,3 +120,7 @@ class TranslationEntry(Base):
     
     def __repr__(self) -> str:
         return f"<TranslationEntry(id={self.id}, source='{self.source_text[:20]}...', language={self.source_language})>"
+
+# Explicit indices (composite ones could be added for source_language + norm fields)
+Index('idx_translation_norm_source', TranslationEntry.norm_source_text)
+Index('idx_translation_norm_translated', TranslationEntry.norm_translated_text)

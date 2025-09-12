@@ -16,6 +16,11 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
+from sqlalchemy.orm import Session
+from .db import get_db_session
+from .utils.normalize import normalize_text
+from .services.dictionary_reader import DictionaryReader
+from .models.official_dictionary import OfficialDictionary
 
 # Import API routers
 from .api.translate import router as translate_router
@@ -37,7 +42,52 @@ async def lifespan(app: FastAPI):
     logger.info("🔮 启动沙斯亚尔语翻译服务... / Starting Shathyar Translation Service...")
     logger.info("📚 Loading mystical knowledge from ancient scrolls...")
     
-    # Here we would initialize database connections, load dictionary, etc.
+    # Initialize dictionary from CSV if table seems empty
+    try:
+      # Peek a DB session
+      from sqlalchemy import select
+      db_gen = get_db_session()
+      db_session: Session = next(db_gen)
+      try:
+        count = db_session.query(OfficialDictionary).count()
+        # Anchor phrases that must exist
+        anchors = [
+          (None, "Aglathrax hig' thrixa."),
+          ("我在你肺里安家了！", None),
+        ]
+        need_reload = (count == 0)
+        if not need_reload:
+          # Verify normalized presence of anchors
+          if anchors[0][1]:
+            nsh = normalize_text(anchors[0][1])
+            if db_session.query(OfficialDictionary).filter(OfficialDictionary.norm_shathyar == nsh).count() == 0:
+              need_reload = True
+          if anchors[1][0]:
+            ncn = normalize_text(anchors[1][0])
+            if db_session.query(OfficialDictionary).filter(OfficialDictionary.norm_origin_cn == ncn).count() == 0:
+              need_reload = True
+        if need_reload:
+          logger.info("📖 Official dictionary empty; attempting to import shasiyaer.csv")
+          reader = DictionaryReader(db_session)
+          # Try multiple common locations
+          candidates = [
+            Path('shasiyaer.csv'),
+            Path('data/shasiyaer.csv'),
+            Path(__file__).resolve().parent.parent.parent / 'shasiyaer.csv',
+          ]
+          csv_path = next((p for p in candidates if p.exists()), None)
+          if csv_path:
+            stats = reader.load_dictionary_from_csv(str(csv_path), force_reload=True)
+            logger.info(f"📥 Dictionary imported: {stats}")
+          else:
+            logger.warning("⚠️ Could not locate shasiyaer.csv; dictionary remains empty")
+      finally:
+        try:
+          next(db_gen)
+        except StopIteration:
+          pass
+    except Exception as e:
+      logger.warning(f"⚠️ Dictionary autoload skipped due to error: {e}")
     
     logger.info("✨ Translation spells are ready!")
     yield

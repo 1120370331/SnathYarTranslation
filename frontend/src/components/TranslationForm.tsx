@@ -33,6 +33,7 @@ export const TranslationForm: React.FC<TranslationFormProps> = ({
   
   const {
     mutate: translate,
+    mutateAsync: translateAsync,
     data: translationResult,
     isLoading,
     error: translationError,
@@ -93,11 +94,15 @@ export const TranslationForm: React.FC<TranslationFormProps> = ({
     }
 
     try {
-      translate(formData);
+      const result = await translateAsync(formData);
+      // Notify parent immediately so magic power updates without waiting for confirm
+      if (onTranslationComplete && result) {
+        onTranslationComplete(result);
+      }
     } catch (error) {
       console.error('Translation error:', error);
     }
-  }, [formData, validateForm, translate]);
+  }, [formData, validateForm, translateAsync, onTranslationComplete]);
 
   // Get placeholder text based on selected language
   const getPlaceholder = useCallback(() => {

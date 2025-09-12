@@ -47,10 +47,7 @@ class DictionaryStatsResponse(BaseModel):
     integrity_check: bool
 
 
-def get_db_session() -> Session:
-    """Get database session (dependency injection)"""
-    # Mock for now - would return actual SQLAlchemy session
-    pass
+from ..db import get_db_session  # Provides a real SQLAlchemy Session
 
 
 @router.get("/search", response_model=DictionarySearchResponse)

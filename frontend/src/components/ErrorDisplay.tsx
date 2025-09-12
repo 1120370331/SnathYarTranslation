@@ -17,7 +17,7 @@ export interface ErrorDisplayProps {
 export const ErrorDisplay: React.FC<ErrorDisplayProps> = ({
   error,
   onRetry,
-  title = '法术失效',
+  title = '失败',
   showRetry = true
 }) => {
   // Extract error message from various error types
@@ -101,7 +101,7 @@ export const ErrorDisplay: React.FC<ErrorDisplayProps> = ({
           {errorCategory.icon}
         </span>
         <h3 className="text-lg font-bold font-mystical text-mystical-text">
-          {title} / Spell Failed
+          {title}
         </h3>
       </div>
 
