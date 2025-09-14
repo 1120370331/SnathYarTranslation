@@ -1,218 +1,100 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Backend entrypoint (Python, no uvicorn CLI)
-# - Runs the app with the selected Python interpreter
-# - Logs to $LOG_DIR/backend.log (tee in foreground mode)
-# - Optional BOOTSTRAP_DEPS=1 will create venv + install deps if missing
+# Backend docker launcher (host-side only)
+# Single method: build and run Docker container
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$SCRIPT_DIR"
 
-# Load .env if present (prefer local backend/.env, then repo root ../.env)
-ENV_FILE="$SCRIPT_DIR/.env"
-if [ ! -f "$ENV_FILE" ] && [ -f "$SCRIPT_DIR/../.env" ]; then
-  ENV_FILE="$SCRIPT_DIR/../.env"
-fi
-if [ -f "$ENV_FILE" ]; then
-  set -a
-  # shellcheck disable=SC1090
-  source "$ENV_FILE"
-  set +a
-  echo "[backend][entrypoint] Loaded env from $(basename "$ENV_FILE")"
-fi
+IMAGE_NAME="${IMAGE_NAME:-snathyar-backend:latest}"
+CONTAINER_NAME="${CONTAINER_NAME:-snathyar-backend}"
+HOST_PORT="${BACKEND_PORT:-9301}"
+CONTAINER_PORT=9301
+BACKEND_HOST_ENV="${BACKEND_HOST:-0.0.0.0}"
+LOG_DIR_HOST="${LOG_DIR:-$HOME/project/logs}"
+CSV_FILE="${CSV_FILE:-$ROOT_DIR/shasiyaer.csv}"
+DB_FILE="${DB_FILE:-}"
+DB_URL="${SHATHYAR_DB_URL:-}"
+DETACH="${DETACH:-1}"
 
-HOST="${BACKEND_HOST:-0.0.0.0}"
-PORT="${BACKEND_PORT:-9301}"
-WORKERS="${UVICORN_WORKERS:-1}"
-LOG_LEVEL="${LOG_LEVEL:-info}"
-RELOAD="${RELOAD:-false}"
-# Prefer container log dir if present
-if [ -z "${LOG_DIR:-}" ]; then
-  if [ -d "/logs" ]; then
-    LOG_DIR="/logs"
-  else
-    LOG_DIR="$HOME/project/logs"
+install_docker() {
+  if command -v docker >/dev/null 2>&1; then
+    return 0
   fi
-fi
-[ -d "$LOG_DIR" ] || mkdir -p "$LOG_DIR"
-LOG_FILE="$LOG_DIR/backend.log"
-PID_FILE="$LOG_DIR/backend.pid"
-FOREGROUND="${FOREGROUND:-1}"
-BOOTSTRAP_DEPS="${BOOTSTRAP_DEPS:-0}"
-
-# Ensure Python can import the local 'src' package
-export PYTHONPATH="${PYTHONPATH:-$SCRIPT_DIR}"
-
-# Pick an interpreter that already has deps; optionally bootstrap deps if requested
-ensure_runtime() {
-  if [ -x "$SCRIPT_DIR/venv/bin/python" ]; then
-    if "$SCRIPT_DIR/venv/bin/python" - <<'PY' >/dev/null 2>&1
-import importlib
-for m in ("fastapi", "uvicorn"):
-    importlib.import_module(m)
-PY
-    then
-      PY="$SCRIPT_DIR/venv/bin/python"
-      echo "[backend][entrypoint] Using venv interpreter: $PY"
-      return
-    else
-      echo "[backend][entrypoint] Warning: venv present but missing deps (fastapi/uvicorn)."
-      if [ "$BOOTSTRAP_DEPS" = "1" ]; then
-        echo "[backend][entrypoint] Bootstrapping deps into existing venv..."
-        bootstrap_runtime "$SCRIPT_DIR/venv/bin/python" || true
-        if "$SCRIPT_DIR/venv/bin/python" - <<'PY' >/dev/null 2>&1
-import importlib
-for m in ("fastapi", "uvicorn"):
-    importlib.import_module(m)
-PY
-        then
-          PY="$SCRIPT_DIR/venv/bin/python"
-          echo "[backend][entrypoint] Using venv after bootstrap: $PY"
-          return
-        fi
-      fi
-      echo "[backend][entrypoint] Falling back to system interpreter."
+  echo "[backend][entrypoint] Docker not found. Installing..."
+  if ! command -v curl >/dev/null 2>&1; then
+    if command -v apt-get >/dev/null 2>&1; then
+      apt-get update -y && apt-get install -y curl ca-certificates
+    elif command -v yum >/dev/null 2>&1; then
+      yum install -y curl ca-certificates || true
+    elif command -v dnf >/dev/null 2>&1; then
+      dnf install -y curl ca-certificates || true
     fi
   fi
-
-  if command -v python3 >/dev/null 2>&1 && \
-     python3 - <<'PY' >/dev/null 2>&1
-import importlib
-for m in ("fastapi", "uvicorn"):
-    importlib.import_module(m)
-PY
-  then
-    PY=python3
-    echo "[backend][entrypoint] Using system interpreter: $PY"
-    return
-  fi
-
-  if command -v python >/dev/null 2>&1 && \
-     python - <<'PY' >/dev/null 2>&1
-import importlib
-for m in ("fastapi", "uvicorn"):
-    importlib.import_module(m)
-PY
-  then
-    PY=python
-    echo "[backend][entrypoint] Using interpreter: $PY"
-    return
-  fi
-
-  echo "[backend][entrypoint] ERROR: Python environment lacks required packages: fastapi and/or uvicorn." >&2
-  if [ "$BOOTSTRAP_DEPS" = "1" ]; then
-    echo "[backend][entrypoint] Attempting to create venv and install deps (BOOTSTRAP_DEPS=1)..." >&2
-    if create_and_install_venv; then
-      PY="$SCRIPT_DIR/venv/bin/python"
-      echo "[backend][entrypoint] Using venv after bootstrap: $PY"
-      return
-    else
-      echo "[backend][entrypoint] Failed to bootstrap dependencies." >&2
-    fi
-  fi
-  echo "[backend][entrypoint] Install deps at build time: pip install -e . or pip install fastapi 'uvicorn[standard]'" >&2
-  exit 1
-}
-
-# Create venv and install project deps
-create_and_install_venv() {
-  echo "[backend][entrypoint] Creating virtual environment under $SCRIPT_DIR/venv" >&2
-  if command -v python3 >/dev/null 2>&1; then
-    python3 -m venv "$SCRIPT_DIR/venv" || return 1
-  elif command -v python >/dev/null 2>&1; then
-    python -m venv "$SCRIPT_DIR/venv" || return 1
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL https://get.docker.com | sh
   else
-    echo "[backend][entrypoint] No python interpreter available to create venv." >&2
-    return 1
+    echo "[backend][entrypoint] ERROR: curl unavailable; cannot install Docker automatically." >&2
+    exit 1
   fi
-  VENV_PY="$SCRIPT_DIR/venv/bin/python"
-  "$VENV_PY" -m ensurepip --upgrade >/dev/null 2>&1 || true
-  "$VENV_PY" -m pip install --upgrade pip setuptools wheel >/dev/null 2>&1 || return 1
-  # Prefer editable install to resolve local package and deps
-  echo "[backend][entrypoint] Installing project dependencies into venv..." >&2
-  if [ -f "$SCRIPT_DIR/pyproject.toml" ]; then
-    "$VENV_PY" -m pip install -e . || return 1
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl enable --now docker || true
+  elif command -v service >/dev/null 2>&1; then
+    service docker start || true
+  fi
+}
+
+ensure_docker() {
+  install_docker
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "[backend][entrypoint] ERROR: Docker installation failed or is unavailable." >&2
+    exit 1
+  fi
+}
+
+docker_build() {
+  echo "[backend][entrypoint] Building image: $IMAGE_NAME"
+  docker build -t "$IMAGE_NAME" "$SCRIPT_DIR"
+}
+
+docker_run() {
+  local run_flags=(
+    --name "$CONTAINER_NAME"
+    --restart unless-stopped
+    -p "$HOST_PORT:$CONTAINER_PORT"
+    -e BACKEND_HOST="$BACKEND_HOST_ENV"
+    -e BACKEND_PORT="$CONTAINER_PORT"
+    -e UVICORN_WORKERS=1
+    -e LOG_LEVEL=info
+    -e RELOAD=false
+  )
+  mkdir -p "$LOG_DIR_HOST"
+  run_flags+=( -v "$LOG_DIR_HOST:/logs" )
+  if [ -f "$CSV_FILE" ]; then
+    run_flags+=( -v "$CSV_FILE:/app/shasiyaer.csv:ro" )
+  fi
+  if [ -n "$DB_FILE" ]; then
+    mkdir -p "$(dirname "$DB_FILE")"
+    run_flags+=( -e SHATHYAR_DB_URL="${DB_URL:-sqlite:////data/shathyar.db}" )
+    run_flags+=( -v "$DB_FILE:/data/shathyar.db" )
+  elif [ -n "$DB_URL" ]; then
+    run_flags+=( -e SHATHYAR_DB_URL="$DB_URL" )
+  fi
+
+  docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+  echo "[backend][entrypoint] Starting container: $CONTAINER_NAME (host:$HOST_PORT -> container:$CONTAINER_PORT)"
+  if [ "$DETACH" = "1" ]; then
+    docker run -d "${run_flags[@]}" "$IMAGE_NAME"
   else
-    # Fallback: explicit deps
-    "$VENV_PY" -m pip install fastapi "uvicorn[standard]" || return 1
-  fi
-  # Verify imports
-  "$VENV_PY" - <<'PY'
-import importlib
-import sys
-for m in ("fastapi", "uvicorn"):
-    importlib.import_module(m)
-print("ok")
-PY
-}
-
-# Attempt to (re)install into an existing interpreter
-bootstrap_runtime() {
-  local py="$1"
-  echo "[backend][entrypoint] Installing project dependencies into $py ..." >&2
-  "$py" -m ensurepip --upgrade >/dev/null 2>&1 || true
-  "$py" -m pip install --upgrade pip setuptools wheel >/dev/null 2>&1 || return 1
-  if [ -f "$SCRIPT_DIR/pyproject.toml" ]; then
-    "$py" -m pip install -e . || return 1
-  else
-    "$py" -m pip install fastapi "uvicorn[standard]" || return 1
+    docker run -it --rm "${run_flags[@]}" "$IMAGE_NAME"
   fi
 }
 
-PY=python3
-ensure_runtime
+ensure_docker
+docker_build
+docker_run
 
-start() {
-  echo "[backend][entrypoint] Starting FastAPI via python on ${HOST}:${PORT} (workers=${WORKERS}, reload=${RELOAD}, fg=${FOREGROUND})"
-  if [ "$FOREGROUND" = "1" ]; then
-    if command -v tee >/dev/null 2>&1; then
-      echo "[backend][entrypoint] Foreground with tee -> $LOG_FILE"
-      (
-        env BACKEND_HOST="$HOST" \
-            BACKEND_PORT="$PORT" \
-            UVICORN_WORKERS="$WORKERS" \
-            LOG_LEVEL="$LOG_LEVEL" \
-            RELOAD="$RELOAD" \
-            "$PY" -m src.main
-      ) 2>&1 | tee -a "$LOG_FILE"
-      exit ${PIPESTATUS[0]:-0}
-    else
-      exec env BACKEND_HOST="$HOST" \
-               BACKEND_PORT="$PORT" \
-               UVICORN_WORKERS="$WORKERS" \
-               LOG_LEVEL="$LOG_LEVEL" \
-               RELOAD="$RELOAD" \
-               "$PY" -m src.main
-    fi
-  else
-    nohup env BACKEND_HOST="$HOST" \
-             BACKEND_PORT="$PORT" \
-             UVICORN_WORKERS="$WORKERS" \
-             LOG_LEVEL="$LOG_LEVEL" \
-             RELOAD="$RELOAD" \
-             "$PY" -m src.main \
-             >>"$LOG_FILE" 2>&1 &
-    echo $! > "$PID_FILE"
-    echo "[backend][entrypoint] PID=$(cat "$PID_FILE"), log=$LOG_FILE"
-  fi
-}
+echo "[backend][entrypoint] Ready. Logs: docker logs -f $CONTAINER_NAME"
 
-cleanup() {
-  echo "[backend][entrypoint] Stopping..."
-  if [ -f "$PID_FILE" ]; then
-    kill "$(cat "$PID_FILE")" 2>/dev/null || true
-    rm -f "$PID_FILE"
-  fi
-  exit 0
-}
-
-trap cleanup INT TERM
-
-start
-
-if [ "$FOREGROUND" != "1" ]; then
-  tail -n +1 -F "$LOG_FILE" &
-  TAIL_PID=$!
-  wait "$TAIL_PID"
-fi

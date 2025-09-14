@@ -22,8 +22,8 @@ WORKDIR /app
 # Copy backend project
 COPY . /app/
 
-# Ensure entrypoint is executable
-RUN chmod +x /app/entrypoint.sh
+# Ensure container entrypoint is executable
+RUN chmod +x /app/container_entrypoint.sh
 
 # Install Python dependencies (project and runtime deps)
 RUN python -m pip install --upgrade pip setuptools wheel \
@@ -35,5 +35,5 @@ VOLUME ["/logs", "/data"]
 
 EXPOSE 9301
 
-ENTRYPOINT ["/app/entrypoint.sh"]
+ENTRYPOINT ["/app/container_entrypoint.sh"]
 CMD []
