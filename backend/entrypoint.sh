@@ -27,7 +27,14 @@ PORT="${BACKEND_PORT:-9301}"
 WORKERS="${UVICORN_WORKERS:-1}"
 LOG_LEVEL="${LOG_LEVEL:-info}"
 RELOAD="${RELOAD:-false}"
-LOG_DIR="${LOG_DIR:-$HOME/project/logs}"
+# Prefer container log dir if present
+if [ -z "${LOG_DIR:-}" ]; then
+  if [ -d "/logs" ]; then
+    LOG_DIR="/logs"
+  else
+    LOG_DIR="$HOME/project/logs"
+  fi
+fi
 [ -d "$LOG_DIR" ] || mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/backend.log"
 PID_FILE="$LOG_DIR/backend.pid"
