@@ -132,29 +132,7 @@ def create_services(db_session: Session):
                 break
         api_key = os.getenv('SHATHYAR_AI_API_KEY') or os.getenv('VOLCENGINE_API_KEY') or ''
         base_url = os.getenv('SHATHYAR_AI_BASE_URL') or base_url
-    # Optional mock AI client for local testing (no external network required)
-    use_mock = (os.getenv('SHATHYAR_AI_MOCK', '0').lower() in ('1', 'true', 'yes', 'on'))
-    if use_mock:
-        class _MockAIClient:
-            async def translate_chinese_to_shathyar(self, chinese_text: str, dictionary_context: Dict = None):
-                # Very lightweight, deterministic pseudo-Shathyar generator
-                import hashlib
-                h = hashlib.sha256(chinese_text.encode('utf-8')).hexdigest()
-                syllables = ['ak','an','al','sh','th','ul','za','ra','qu','gul','ka','iil','bw','ez','kor','vash','jir','mor','dun']
-                words = []
-                for i in range(3):
-                    idx1 = int(h[i*2:i*2+2], 16) % len(syllables)
-                    idx2 = int(h[i*2+6:i*2+8], 16) % len(syllables)
-                    w = (syllables[idx1] + syllables[idx2])
-                    if i == 2:
-                        w = w.capitalize() + "'ov"
-                    words.append(w.capitalize())
-                pseudo = ' '.join(words)
-                from types import SimpleNamespace
-                return SimpleNamespace(translated_text=pseudo, confidence_score=0.82)
-        ai_client = _MockAIClient()
-    else:
-        ai_client = AIClient(api_key=api_key, base_url=base_url)
+    ai_client = AIClient(api_key=api_key, base_url=base_url)
     dictionary_reader = DictionaryReader(db_session)
     rate_limiter = RateLimiter(db_session)
     translator = ShathyarTranslator(db_session, ai_client, dictionary_reader)
@@ -216,7 +194,7 @@ async def translate_text(
         if request_data.source_language == 'shathyar':
             quota = rate_limiter.get_session_quota(client_ip)
             error_response = ErrorResponse(
-                error='破译失败... 请尝试重新操作 / Please try again',
+                error='破译失败...',
                 error_type='translation_not_found',
                 magic_power_remaining=quota.get('tokens_remaining', 0)
             )
@@ -242,8 +220,7 @@ async def translate_text(
                 )
 
         # 2) For chinese→shathyar, ensure AI auth is configured; then check rate limit and consume token
-        # Only enforce AI auth when the client exposes an api_key attribute
-        if hasattr(services['ai_client'], 'api_key') and not services['ai_client'].api_key:
+        if not services['ai_client'].api_key:
             quota = rate_limiter.get_session_quota(client_ip)
             error_response = ErrorResponse(
                 error='AI 服务未配置或认证失败 / AI service not configured or authentication failed',
@@ -292,7 +269,7 @@ async def translate_text(
         except TranslationNotFoundError:
             processing_time = int((time.time() - start_time) * 1000)
             error_response = ErrorResponse(
-                error='破译失败... 请尝试重新操作 / Please try again',
+                error='破译失败...',
                 error_type='translation_not_found',
                 magic_power_remaining=token_result.tokens_remaining
             )
@@ -303,7 +280,7 @@ async def translate_text(
             if ' 404' in msg or 'Not Found' in msg:
                 # Treat unknown model/endpoint as not-found to avoid confusing users
                 error_response = ErrorResponse(
-                    error='破译失败... 请尝试重新操作 / Please try again',
+                    error='破译失败...',
                     error_type='translation_not_found',
                     magic_power_remaining=token_result.tokens_remaining
                 )

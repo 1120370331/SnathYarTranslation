@@ -257,24 +257,25 @@ class DictionaryReader:
         else:
             raise ValueError("Language must be 'chinese' or 'shathyar'")
     
-    def get_context(self, limit: int = 50) -> Dict[str, Any]:
+    def get_context(self, limit: int = 50, include_all: bool = False) -> Dict[str, Any]:
         """
         Get dictionary context for AI translation prompts
         
-        Returns sample dictionary entries and patterns for AI context.
-        Cached for performance.
+        When include_all=True, returns ALL dictionary entries (no caching),
+        plus lightweight pattern hints. Otherwise, returns a cached sample set
+        of entries for performance.
         
         Args:
-            limit: Maximum number of context entries
+            limit: Maximum number of sample entries (ignored if include_all=True)
+            include_all: Whether to return all entries from the official dictionary
             
         Returns:
             Dictionary context data
         """
         
-        if self._context_cache is None:
-            # Get representative samples
+        # Full export mode (no cache, to always reflect latest data)
+        if include_all:
             total_entries = self.db_session.query(OfficialDictionary).count()
-            
             if total_entries == 0:
                 return {
                     "status": "empty",
@@ -282,29 +283,39 @@ class DictionaryReader:
                     "total_entries": 0,
                     "patterns": {}
                 }
-            
-            # Get diverse samples (first, middle, last entries)
+            all_entries = self.db_session.query(OfficialDictionary).all()
+            patterns = self._analyze_dictionary_patterns(all_entries)
+            return {
+                "status": "loaded_all",
+                "sample_entries": [e.to_dict() for e in all_entries],
+                "total_entries": total_entries,
+                "patterns": patterns,
+                "generated_at": str(datetime.utcnow())
+            }
+
+        # Cached sample mode
+        if self._context_cache is None:
+            total_entries = self.db_session.query(OfficialDictionary).count()
+            if total_entries == 0:
+                return {
+                    "status": "empty",
+                    "sample_entries": [],
+                    "total_entries": 0,
+                    "patterns": {}
+                }
+
             sample_entries = []
-            
-            # First entries
-            first_entries = self.db_session.query(OfficialDictionary).limit(limit // 3).all()
+            first_entries = self.db_session.query(OfficialDictionary).limit(max(1, limit // 3)).all()
             sample_entries.extend(first_entries)
-            
-            # Middle entries
             if total_entries > limit:
                 offset = total_entries // 2
-                middle_entries = self.db_session.query(OfficialDictionary).offset(offset).limit(limit // 3).all()
+                middle_entries = self.db_session.query(OfficialDictionary).offset(offset).limit(max(1, limit // 3)).all()
                 sample_entries.extend(middle_entries)
-                
-                # Last entries
-                last_offset = max(0, total_entries - limit // 3)
+                last_offset = max(0, total_entries - max(1, limit // 3))
                 last_entries = self.db_session.query(OfficialDictionary).offset(last_offset).all()
                 sample_entries.extend(last_entries)
-            
-            # Analyze patterns
+
             patterns = self._analyze_dictionary_patterns(sample_entries)
-            
-            # Cache the result
             self._context_cache = {
                 "status": "loaded",
                 "sample_entries": [entry.to_dict() for entry in sample_entries[:limit]],
@@ -312,7 +323,7 @@ class DictionaryReader:
                 "patterns": patterns,
                 "generated_at": str(datetime.utcnow())
             }
-        
+
         return self._context_cache
     
     def get_dictionary_stats(self) -> Dict[str, Any]:

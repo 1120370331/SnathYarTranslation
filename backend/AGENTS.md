@@ -1,4 +1,6 @@
-%23 Repository Guidelines
+> Note: The canonical contributor guide lives at the repo root: [AGENTS.md](../AGENTS.md).
+
+# Repository Guidelines
 
 ## Project Structure & Modules
 - `src/main.py`: FastAPI app, middleware, and router wiring.

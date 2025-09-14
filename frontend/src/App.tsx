@@ -13,7 +13,7 @@ import ErrorBoundary from './components/ErrorBoundary'
 function App() {
   return (
     <ErrorBoundary>
-      <div className="App mystical-container min-h-screen bg-mystical-dark">
+      <div className="App mystical-container min-h-screen">
         <Router>
           {/* Header */}
           <header className="bg-mystical-darker border-b border-mystical-border shadow-mystical">

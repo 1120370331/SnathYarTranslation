@@ -9,6 +9,7 @@ import React, { useState, useCallback } from 'react';
 import { useTranslation } from '../hooks/useTranslation';
 import { TranslationResult } from './TranslationResult';
 import { ErrorDisplay } from './ErrorDisplay';
+import type { TranslationResponse } from '../services/api-client';
 
 export interface TranslationFormProps {
   onTranslationComplete?: (result: any) => void;
@@ -30,6 +31,7 @@ export const TranslationForm: React.FC<TranslationFormProps> = ({
   });
   
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showCasting, setShowCasting] = useState(false);
   
   const {
     mutate: translate,
@@ -39,6 +41,10 @@ export const TranslationForm: React.FC<TranslationFormProps> = ({
     error: translationError,
     reset: resetTranslation
   } = useTranslation();
+
+  // Keep a local copy of the latest shown result so we can
+  // immediately reflect user edits after confirmation.
+  const [currentResult, setCurrentResult] = useState<TranslationResponse | null>(null);
 
   // Character count and validation
   const characterCount = formData.text.length;
@@ -73,7 +79,10 @@ export const TranslationForm: React.FC<TranslationFormProps> = ({
     if (translationResult) {
       resetTranslation();
     }
-  }, [errors.text, translationResult, resetTranslation]);
+    if (currentResult) {
+      setCurrentResult(null);
+    }
+  }, [errors.text, translationResult, resetTranslation, currentResult]);
 
   const handleLanguageChange = useCallback((event: React.ChangeEvent<HTMLSelectElement>) => {
     const newLanguage = event.target.value as 'chinese' | 'shathyar';
@@ -83,7 +92,10 @@ export const TranslationForm: React.FC<TranslationFormProps> = ({
     if (translationResult) {
       resetTranslation();
     }
-  }, [translationResult, resetTranslation]);
+    if (currentResult) {
+      setCurrentResult(null);
+    }
+  }, [translationResult, resetTranslation, currentResult]);
 
   // Handle form submission
   const handleSubmit = useCallback(async (event: React.FormEvent) => {
@@ -93,14 +105,26 @@ export const TranslationForm: React.FC<TranslationFormProps> = ({
       return;
     }
 
+    // Show mystical casting overlay immediately for better perceived responsiveness
+    setShowCasting(true);
+    const started = Date.now();
     try {
       const result = await translateAsync(formData);
       // Notify parent immediately so magic power updates without waiting for confirm
       if (onTranslationComplete && result) {
         onTranslationComplete(result);
       }
+      // Update local shown result so edits can propagate
+      if (result) setCurrentResult(result);
     } catch (error) {
       console.error('Translation error:', error);
+    }
+    finally {
+      // Keep the overlay visible for a minimum duration to ensure it is noticeable
+      const elapsed = Date.now() - started;
+      const minDuration = 600; // ms
+      const delay = Math.max(0, minDuration - elapsed);
+      setTimeout(() => setShowCasting(false), delay);
     }
   }, [formData, validateForm, translateAsync, onTranslationComplete]);
 
@@ -120,7 +144,7 @@ export const TranslationForm: React.FC<TranslationFormProps> = ({
   }, [characterCount, isTextTooLong]);
 
   return (
-    <div className="mystical-container max-w-4xl mx-auto p-6">
+    <div className="mystical-container max-w-4xl mx-auto p-6 relative">
 
       {/* Main Translation Form */}
       <form 
@@ -210,12 +234,29 @@ export const TranslationForm: React.FC<TranslationFormProps> = ({
       )}
 
       {/* Translation Result */}
-      {translationResult && !translationError && (
+      {(currentResult || translationResult) && !translationError && (
         <div className="mt-6">
           <TranslationResult 
-            result={translationResult}
-            onTranslationConfirmed={onTranslationComplete}
+            result={(currentResult || translationResult)!}
+            onTranslationConfirmed={(updated) => {
+              setCurrentResult(updated);
+              if (onTranslationComplete) onTranslationComplete(updated);
+            }}
           />
+        </div>
+      )}
+
+      {/* Inline mystical casting indicator during translation (non-blocking) */}
+      {(isLoading || showCasting) && (
+        <div className="mt-6 flex items-center justify-center fade-in" role="status" aria-live="polite" aria-busy="true">
+          <div className="relative scale-75 md:scale-100">
+            <div className="mystical-casting-aura" />
+            <div className="mystical-casting-ring" />
+            <div className="mystical-casting-core" />
+          </div>
+          <div className="ml-4 text-blue-200/90 font-mystical text-sm tracking-wide">
+            正在翻译... / Translating...
+          </div>
         </div>
       )}
     </div>
