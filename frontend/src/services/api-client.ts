@@ -186,7 +186,7 @@ export const apiClient = {
     }
   },
 
-  async confirmTranslation(translationId: string, editedText: string, originalChinese: string): Promise<TranslationResponse> {
+  async confirmTranslation(translationId: string, editedText: string, _originalChinese: string): Promise<TranslationResponse> {
     try {
       const { data } = await http.post(`/translate/${encodeURIComponent(translationId)}/confirm`, {
         edited_text: editedText,
