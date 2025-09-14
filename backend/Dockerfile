@@ -14,6 +14,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# Optional pip mirror (set via build-args)
+ARG PIP_INDEX_URL
+ARG PIP_EXTRA_INDEX_URL
+ENV PIP_INDEX_URL=${PIP_INDEX_URL} \
+    PIP_EXTRA_INDEX_URL=${PIP_EXTRA_INDEX_URL}
+
 # Install system dependencies only if needed (kept minimal for manylinux wheels)
 # RUN apt-get update && apt-get install -y --no-install-recommends \
 #     ca-certificates \
