@@ -280,16 +280,24 @@ async def rate_limit_handler(request: Request, exc: HTTPException):
 
 if __name__ == "__main__":
     import uvicorn
-    
+
+    # Read runtime configuration from environment
+    host = os.getenv("BACKEND_HOST", "0.0.0.0")
+    port = int(os.getenv("BACKEND_PORT", "8000"))
+    workers = int(os.getenv("UVICORN_WORKERS", "1"))
+    log_level = os.getenv("LOG_LEVEL", "info")
+    reload_flag = os.getenv("RELOAD", "false").strip().lower() in {"1", "true", "yes"}
+
     print("🔮 启动沙斯亚尔语翻译服务器... / Starting Shathyar Translation Server...")
-    print("📍 服务地址 / Server Address: http://localhost:8000")
-    print("📚 API文档 / API Documentation: http://localhost:8000/docs") 
+    print(f"📍 服务地址 / Server Address: http://{host}:{port}")
+    print(f"📚 API文档 / API Documentation: http://{host}:{port}/docs")
     print("✨ 准备接收翻译请求... / Ready to receive translation requests...")
-    
+
     uvicorn.run(
         "src.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
+        host=host,
+        port=port,
+        reload=reload_flag,
+        log_level=log_level,
+        workers=workers if not reload_flag else 1,
     )
