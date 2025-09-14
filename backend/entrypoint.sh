@@ -26,6 +26,7 @@ HOST="${BACKEND_HOST:-0.0.0.0}"
 PORT="${BACKEND_PORT:-9301}"
 WORKERS="${UVICORN_WORKERS:-1}"
 LOG_LEVEL="${LOG_LEVEL:-info}"
+RELOAD="${RELOAD:-false}"
 
 LOG_DIR="${LOG_DIR:-$HOME/project/logs}"
 [ -d "$LOG_DIR" ] || mkdir -p "$LOG_DIR"
@@ -67,14 +68,17 @@ PY=python3
 ensure_runtime
 
 start() {
-  echo "[backend][entrypoint] Starting Uvicorn on ${HOST}:${PORT} (workers=${WORKERS})"
-  nohup "$PY" -m uvicorn src.main:app \
-    --host "$HOST" \
-    --port "$PORT" \
-    --workers "$WORKERS" \
-    --log-level "$LOG_LEVEL" \
-    --proxy-headers \
-    >>"$LOG_FILE" 2>&1 &
+  echo "[backend][entrypoint] Starting FastAPI via python on ${HOST}:${PORT} (workers=${WORKERS}, reload=${RELOAD})"
+  # Run the application using plain python executing src/main.py
+  # Environment variables control host/port/workers/log level/reload
+  nohup env \
+    BACKEND_HOST="$HOST" \
+    BACKEND_PORT="$PORT" \
+    UVICORN_WORKERS="$WORKERS" \
+    LOG_LEVEL="$LOG_LEVEL" \
+    RELOAD="$RELOAD" \
+    "$PY" "$SCRIPT_DIR/src/main.py" \
+      >>"$LOG_FILE" 2>&1 &
   echo $! > "$PID_FILE"
   echo "[backend][entrypoint] PID=$(cat "$PID_FILE"), log=$LOG_FILE"
 }
