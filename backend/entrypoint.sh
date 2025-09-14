@@ -9,6 +9,19 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Load .env if present (prefer local backend/.env, then repo root ../.env)
+ENV_FILE="$SCRIPT_DIR/.env"
+if [ ! -f "$ENV_FILE" ] && [ -f "$SCRIPT_DIR/../.env" ]; then
+  ENV_FILE="$SCRIPT_DIR/../.env"
+fi
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  set +a
+  echo "[backend][entrypoint] Loaded env from $(basename "$ENV_FILE")"
+fi
+
 HOST="${BACKEND_HOST:-0.0.0.0}"
 PORT="${BACKEND_PORT:-9301}"
 WORKERS="${UVICORN_WORKERS:-1}"

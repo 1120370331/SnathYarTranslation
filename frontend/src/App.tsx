@@ -5,7 +5,7 @@
  */
 
 import React from 'react'
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import TranslationPage from './pages/TranslationPage'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -14,7 +14,7 @@ function App() {
   return (
     <ErrorBoundary>
       <div className="App mystical-container min-h-screen">
-        <Router>
+        <Router basename={(import.meta as any).env.BASE_URL || '/'}>
           {/* Header */}
           <header className="bg-mystical-darker border-b border-mystical-border shadow-mystical">
             <div className="container mx-auto px-4 py-6">
@@ -109,12 +109,12 @@ const NotFoundPage: React.FC = () => {
           <em>This path is not recorded in the ancient scrolls... Please return to the translation portal to continue your linguistic journey.</em>
         </p>
       </div>
-      <a
-        href="/"
+      <Link
+        to="/"
         className="mystical-button px-8 py-3 rounded-md font-medium bg-mystical-accent hover:bg-mystical-accent-hover text-mystical-dark hover:shadow-mystical-glow transition-all duration-300 inline-block"
       >
         返回翻译门户 / Return to Portal
-      </a>
+      </Link>
     </div>
   )
 }
