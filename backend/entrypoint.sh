@@ -24,21 +24,49 @@ install_docker() {
     return 0
   fi
   echo "[backend][entrypoint] Docker not found. Installing..."
-  if ! command -v curl >/dev/null 2>&1; then
-    if command -v apt-get >/dev/null 2>&1; then
-      apt-get update -y && apt-get install -y curl ca-certificates
-    elif command -v yum >/dev/null 2>&1; then
-      yum install -y curl ca-certificates || true
-    elif command -v dnf >/dev/null 2>&1; then
-      dnf install -y curl ca-certificates || true
+
+  # 1) Try OS package managers first
+  if command -v apt-get >/dev/null 2>&1; then
+    echo "[backend][entrypoint] Installing via apt-get (docker.io)"
+    DEBIAN_FRONTEND=noninteractive apt-get update -y || true
+    DEBIAN_FRONTEND=noninteractive apt-get install -y docker.io || true
+  elif command -v yum >/dev/null 2>&1; then
+    echo "[backend][entrypoint] Installing via yum"
+    if command -v amazon-linux-extras >/dev/null 2>&1; then
+      amazon-linux-extras install -y docker || true
+    else
+      yum install -y docker || yum install -y docker-engine || true
+    fi
+  elif command -v dnf >/dev/null 2>&1; then
+    echo "[backend][entrypoint] Installing via dnf"
+    dnf install -y docker || true
+  elif command -v zypper >/dev/null 2>&1; then
+    echo "[backend][entrypoint] Installing via zypper"
+    zypper -n in docker || true
+  fi
+
+  # 2) Fallback to official (or CN mirror) install script if still missing
+  if ! command -v docker >/dev/null 2>&1; then
+    if ! command -v curl >/dev/null 2>&1; then
+      if command -v apt-get >/dev/null 2>&1; then
+        apt-get update -y && apt-get install -y curl ca-certificates || true
+      elif command -v yum >/dev/null 2>&1; then
+        yum install -y curl ca-certificates || true
+      elif command -v dnf >/dev/null 2>&1; then
+        dnf install -y curl ca-certificates || true
+      fi
+    fi
+    if command -v curl >/dev/null 2>&1; then
+      if [ "${DOCKER_INSTALL_MIRROR:-}" = "cn" ]; then
+        echo "[backend][entrypoint] Using CN mirror script (DaoCloud)"
+        curl -fsSL https://get.daocloud.io/docker | sh || true
+      else
+        curl -fsSL https://get.docker.com | sh || true
+      fi
     fi
   fi
-  if command -v curl >/dev/null 2>&1; then
-    curl -fsSL https://get.docker.com | sh
-  else
-    echo "[backend][entrypoint] ERROR: curl unavailable; cannot install Docker automatically." >&2
-    exit 1
-  fi
+
+  # 3) Start Docker service if present
   if command -v systemctl >/dev/null 2>&1; then
     systemctl enable --now docker || true
   elif command -v service >/dev/null 2>&1; then
@@ -97,4 +125,3 @@ docker_build
 docker_run
 
 echo "[backend][entrypoint] Ready. Logs: docker logs -f $CONTAINER_NAME"
-
