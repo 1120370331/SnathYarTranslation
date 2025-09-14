@@ -80,6 +80,35 @@ ensure_docker() {
     echo "[backend][entrypoint] ERROR: Docker installation failed or is unavailable." >&2
     exit 1
   fi
+  # Try to ensure docker daemon is running (no-systemd envs)
+  if ! docker info >/dev/null 2>&1; then
+    echo "[backend][entrypoint] Docker daemon not running. Attempting to start..."
+    if command -v systemctl >/dev/null 2>&1; then
+      systemctl start docker || true
+    elif command -v service >/dev/null 2>&1; then
+      service docker start || true
+    fi
+    if ! docker info >/dev/null 2>&1; then
+      echo "[backend][entrypoint] Launching dockerd (no systemd). Using storage-driver=vfs as fallback."
+      local SOCK_PATH="/tmp/docker-${UID}.sock"
+      local DATA_ROOT="/tmp/docker-data-${UID}"
+      local EXEC_ROOT="/tmp/docker-exec-${UID}"
+      mkdir -p "${DATA_ROOT}" "${EXEC_ROOT}" /var/run || true
+      nohup dockerd \
+        --host="unix://${SOCK_PATH}" \
+        --data-root="${DATA_ROOT}" \
+        --exec-root="${EXEC_ROOT}" \
+        --storage-driver=vfs >>/var/log/dockerd.log 2>&1 &
+      export DOCKER_HOST="unix://${SOCK_PATH}"
+      for i in $(seq 1 20); do
+        if docker info >/dev/null 2>&1; then
+          echo "[backend][entrypoint] Docker daemon is up."
+          break
+        fi
+        sleep 1
+      done
+    fi
+  fi
 }
 
 docker_build() {

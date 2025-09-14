@@ -19,6 +19,8 @@ CSV_FILE="${CSV_FILE:-$ROOT_DIR/shasiyaer.csv}"
 DB_FILE="${DB_FILE:-}"          # optional host path for sqlite persistence
 DB_URL="${SHATHYAR_DB_URL:-}"   # optional custom DB URL
 DETACH="${DETACH:-1}"
+DOCKER_SOCK_DEFAULT="unix:///var/run/docker.sock"
+DOCKER_HOST_ENV="${DOCKER_HOST:-}"
 
 install_docker() {
   if command -v docker >/dev/null 2>&1; then
@@ -134,7 +136,19 @@ ensure_docker_daemon() {
   # If still not running, try launching dockerd directly (no systemd)
   if ! docker info >/dev/null 2>&1; then
     echo "[backend][deploy] Launching dockerd (no systemd). Using storage-driver=vfs as fallback."
-    nohup dockerd --host=unix:///var/run/docker.sock --storage-driver=vfs >>/var/log/dockerd.log 2>&1 &
+    # Use per-user tmp paths to avoid permission issues
+    local SOCK_PATH="/tmp/docker-${UID}.sock"
+    local DATA_ROOT="/tmp/docker-data-${UID}"
+    local EXEC_ROOT="/tmp/docker-exec-${UID}"
+    mkdir -p "${DATA_ROOT}" "${EXEC_ROOT}" /var/run || true
+    # Start daemon
+    nohup dockerd \
+      --host="unix://${SOCK_PATH}" \
+      --data-root="${DATA_ROOT}" \
+      --exec-root="${EXEC_ROOT}" \
+      --storage-driver=vfs >>/var/log/dockerd.log 2>&1 &
+    # Point docker CLI to the ephemeral socket for subsequent commands
+    export DOCKER_HOST="unix://${SOCK_PATH}"
   fi
   # Wait for daemon to be ready
   for i in $(seq 1 20); do
