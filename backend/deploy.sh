@@ -29,9 +29,11 @@ if [ "$USE_VENV" = "1" ] && [ -x venv/bin/python ]; then
   "$VPY" -m pip install -e . >/dev/null
   echo "[backend][deploy] Done. You can start with ./entrypoint.sh"
 else
-  echo "[backend][deploy] Installing to user site-packages (~/.local)"
+  echo "[backend][deploy] Installing to user site-packages (~/.local) with PEP 668 override"
   "$PY" -m ensurepip --upgrade >/dev/null 2>&1 || true
-  "$PY" -m pip install --user -U pip setuptools wheel >/dev/null
-  "$PY" -m pip install --user -e . >/dev/null
+  PIP_BREAK_SYSTEM_PACKAGES=1 "$PY" -m pip install --user -U pip setuptools wheel >/dev/null || \
+    "$PY" -m pip install --user -U pip setuptools wheel --break-system-packages >/dev/null || true
+  PIP_BREAK_SYSTEM_PACKAGES=1 "$PY" -m pip install --user -e . >/dev/null || \
+    "$PY" -m pip install --user -e . --break-system-packages >/dev/null
   echo "[backend][deploy] Done (user mode). entrypoint will use 'python -m uvicorn' automatically."
 fi
