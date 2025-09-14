@@ -14,7 +14,12 @@ function App() {
   return (
     <ErrorBoundary>
       <div className="App mystical-container min-h-screen">
-        <Router basename={(import.meta as any).env.BASE_URL || '/'}>
+        <Router basename={(() => {
+          const raw = (import.meta as any).env.BASE_URL || '/'
+          // React Router expects basename without trailing slash
+          const trimmed = raw.replace(/\/+$/, '')
+          return trimmed.length ? trimmed : '/'
+        })()}>
           {/* Header */}
           <header className="bg-mystical-darker border-b border-mystical-border shadow-mystical">
             <div className="container mx-auto px-4 py-6">
