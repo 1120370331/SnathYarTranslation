@@ -32,6 +32,9 @@ LOG_FILE="$LOG_DIR/backend.log"
 PID_FILE="$LOG_DIR/backend.pid"
 FOREGROUND="${FOREGROUND:-1}"
 
+# Ensure Python can import the local 'src' package
+export PYTHONPATH="${PYTHONPATH:-$SCRIPT_DIR}"
+
 # Pick an interpreter that already has deps; do not install at runtime
 ensure_runtime() {
   if [ -x "$SCRIPT_DIR/venv/bin/python" ]; then
@@ -92,7 +95,7 @@ start() {
             UVICORN_WORKERS="$WORKERS" \
             LOG_LEVEL="$LOG_LEVEL" \
             RELOAD="$RELOAD" \
-            "$PY" "$SCRIPT_DIR/src/main.py"
+            "$PY" -m src.main
       ) 2>&1 | tee -a "$LOG_FILE"
       exit ${PIPESTATUS[0]:-0}
     else
@@ -101,7 +104,7 @@ start() {
                UVICORN_WORKERS="$WORKERS" \
                LOG_LEVEL="$LOG_LEVEL" \
                RELOAD="$RELOAD" \
-               "$PY" "$SCRIPT_DIR/src/main.py"
+               "$PY" -m src.main
     fi
   else
     nohup env BACKEND_HOST="$HOST" \
@@ -109,7 +112,7 @@ start() {
              UVICORN_WORKERS="$WORKERS" \
              LOG_LEVEL="$LOG_LEVEL" \
              RELOAD="$RELOAD" \
-             "$PY" "$SCRIPT_DIR/src/main.py" \
+             "$PY" -m src.main \
              >>"$LOG_FILE" 2>&1 &
     echo $! > "$PID_FILE"
     echo "[backend][entrypoint] PID=$(cat "$PID_FILE"), log=$LOG_FILE"
