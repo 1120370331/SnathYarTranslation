@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Backend entrypoint
-# - Starts Uvicorn
-# - Writes logs to $LOG_DIR/backend.log
-# - Tails the log to foreground for easy observation in container
+# Backend entrypoint (Python, no uvicorn CLI)
+# - Runs the app with the selected Python interpreter
+# - Logs to $LOG_DIR/backend.log (tee in foreground mode)
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -27,60 +26,94 @@ PORT="${BACKEND_PORT:-9301}"
 WORKERS="${UVICORN_WORKERS:-1}"
 LOG_LEVEL="${LOG_LEVEL:-info}"
 RELOAD="${RELOAD:-false}"
-
 LOG_DIR="${LOG_DIR:-$HOME/project/logs}"
 [ -d "$LOG_DIR" ] || mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/backend.log"
 PID_FILE="$LOG_DIR/backend.pid"
+FOREGROUND="${FOREGROUND:-1}"
 
-# Ensure runtime has uvicorn available
+# Pick an interpreter that already has deps; do not install at runtime
 ensure_runtime() {
-  # Prefer project venv
-  if [ ! -x "$SCRIPT_DIR/venv/bin/python" ]; then
-    # Try to create venv (may fail if python3-venv is missing)
-    command -v python3 >/dev/null 2>&1 || true
-    python3 -m ensurepip --upgrade >/dev/null 2>&1 || true
-    python3 -m venv "$SCRIPT_DIR/venv" >/dev/null 2>&1 || true
+  if [ -x "$SCRIPT_DIR/venv/bin/python" ]; then
+    if "$SCRIPT_DIR/venv/bin/python" - <<'PY' >/dev/null 2>&1
+import importlib
+for m in ("fastapi", "uvicorn"):
+    importlib.import_module(m)
+PY
+    then
+      PY="$SCRIPT_DIR/venv/bin/python"
+      echo "[backend][entrypoint] Using venv interpreter: $PY"
+      return
+    else
+      echo "[backend][entrypoint] Warning: venv present but missing deps (fastapi/uvicorn); falling back."
+    fi
   fi
 
-  if [ -x "$SCRIPT_DIR/venv/bin/python" ]; then
-    # Install deps into venv if uvicorn missing
-    if ! "$SCRIPT_DIR/venv/bin/python" -c 'import uvicorn' >/dev/null 2>&1; then
-      echo "[backend][entrypoint] Installing deps into venv"
-      "$SCRIPT_DIR/venv/bin/python" -m pip install -U pip >/dev/null 2>&1 || true
-      "$SCRIPT_DIR/venv/bin/python" -m pip install -e . >/dev/null 2>&1 || true
-    fi
-    PY="$SCRIPT_DIR/venv/bin/python"
+  if command -v python3 >/dev/null 2>&1 && \
+     python3 - <<'PY' >/dev/null 2>&1
+import importlib
+for m in ("fastapi", "uvicorn"):
+    importlib.import_module(m)
+PY
+  then
+    PY=python3
+    echo "[backend][entrypoint] Using system interpreter: $PY"
     return
   fi
 
-  # Fallback: break PEP 668 for system/user install as last resort
-  if ! python3 -c 'import uvicorn' >/dev/null 2>&1; then
-    echo "[backend][entrypoint] Fallback installing deps to system/user site (PEP 668 override)"
-    PIP_BREAK_SYSTEM_PACKAGES=1 python3 -m ensurepip --upgrade >/dev/null 2>&1 || true
-    PIP_BREAK_SYSTEM_PACKAGES=1 python3 -m pip install -U pip setuptools wheel >/dev/null 2>&1 || true
-    PIP_BREAK_SYSTEM_PACKAGES=1 python3 -m pip install -e . >/dev/null 2>&1 || true
+  if command -v python >/dev/null 2>&1 && \
+     python - <<'PY' >/dev/null 2>&1
+import importlib
+for m in ("fastapi", "uvicorn"):
+    importlib.import_module(m)
+PY
+  then
+    PY=python
+    echo "[backend][entrypoint] Using interpreter: $PY"
+    return
   fi
-  PY=python3
+
+  echo "[backend][entrypoint] ERROR: Python environment lacks required packages: fastapi and/or uvicorn." >&2
+  echo "[backend][entrypoint] Install deps at build time: pip install -e .[dev] or pip install fastapi 'uvicorn[standard]'" >&2
+  exit 1
 }
 
 PY=python3
 ensure_runtime
 
 start() {
-  echo "[backend][entrypoint] Starting FastAPI via python on ${HOST}:${PORT} (workers=${WORKERS}, reload=${RELOAD})"
-  # Run the application using plain python executing src/main.py
-  # Environment variables control host/port/workers/log level/reload
-  nohup env \
-    BACKEND_HOST="$HOST" \
-    BACKEND_PORT="$PORT" \
-    UVICORN_WORKERS="$WORKERS" \
-    LOG_LEVEL="$LOG_LEVEL" \
-    RELOAD="$RELOAD" \
-    "$PY" "$SCRIPT_DIR/src/main.py" \
-      >>"$LOG_FILE" 2>&1 &
-  echo $! > "$PID_FILE"
-  echo "[backend][entrypoint] PID=$(cat "$PID_FILE"), log=$LOG_FILE"
+  echo "[backend][entrypoint] Starting FastAPI via python on ${HOST}:${PORT} (workers=${WORKERS}, reload=${RELOAD}, fg=${FOREGROUND})"
+  if [ "$FOREGROUND" = "1" ]; then
+    if command -v tee >/dev/null 2>&1; then
+      echo "[backend][entrypoint] Foreground with tee -> $LOG_FILE"
+      (
+        env BACKEND_HOST="$HOST" \
+            BACKEND_PORT="$PORT" \
+            UVICORN_WORKERS="$WORKERS" \
+            LOG_LEVEL="$LOG_LEVEL" \
+            RELOAD="$RELOAD" \
+            "$PY" "$SCRIPT_DIR/src/main.py"
+      ) 2>&1 | tee -a "$LOG_FILE"
+      exit ${PIPESTATUS[0]:-0}
+    else
+      exec env BACKEND_HOST="$HOST" \
+               BACKEND_PORT="$PORT" \
+               UVICORN_WORKERS="$WORKERS" \
+               LOG_LEVEL="$LOG_LEVEL" \
+               RELOAD="$RELOAD" \
+               "$PY" "$SCRIPT_DIR/src/main.py"
+    fi
+  else
+    nohup env BACKEND_HOST="$HOST" \
+             BACKEND_PORT="$PORT" \
+             UVICORN_WORKERS="$WORKERS" \
+             LOG_LEVEL="$LOG_LEVEL" \
+             RELOAD="$RELOAD" \
+             "$PY" "$SCRIPT_DIR/src/main.py" \
+             >>"$LOG_FILE" 2>&1 &
+    echo $! > "$PID_FILE"
+    echo "[backend][entrypoint] PID=$(cat "$PID_FILE"), log=$LOG_FILE"
+  fi
 }
 
 cleanup() {
@@ -95,6 +128,9 @@ cleanup() {
 trap cleanup INT TERM
 
 start
-tail -n +1 -F "$LOG_FILE" &
-TAIL_PID=$!
-wait "$TAIL_PID"
+
+if [ "$FOREGROUND" != "1" ]; then
+  tail -n +1 -F "$LOG_FILE" &
+  TAIL_PID=$!
+  wait "$TAIL_PID"
+fi
