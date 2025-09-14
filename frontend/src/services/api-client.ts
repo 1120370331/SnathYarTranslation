@@ -192,23 +192,13 @@ export const apiClient = {
       })
       return data
     } catch (err) {
-      // Fallback: store mapping in local cache so future lookups hit cache
-      try {
-        const raw = localStorage.getItem('shathyar_cache_v1')
-        const cache = raw ? JSON.parse(raw) : {}
-        cache[originalChinese] = editedText
-        localStorage.setItem('shathyar_cache_v1', JSON.stringify(cache))
-      } catch {}
-      return {
-        translated_text: editedText,
-        source_text: originalChinese,
-        is_cached: true,
-        is_ai_generated: true,
-        can_edit: false,
-        magic_power_remaining: getLocalQuota().tokens_remaining,
-        translation_id: translationId,
-        source: 'cache',
+      // Do NOT pretend success: confirmation must persist on backend
+      // to enable reverse lookup and future caching as per PRD.
+      if (axios.isAxiosError(err) && err.response) {
+        const msg = (err.response.data && (err.response.data.error || err.response.data.detail)) || '确认失败，未保存到服务器'
+        throw new Error(msg)
       }
+      throw new Error('确认失败，后端不可用 / Confirmation failed, backend unreachable')
     }
   },
 }

@@ -40,7 +40,7 @@ class CircuitBreakerConfig:
     failure_threshold: int = 5          # Failures before opening
     success_threshold: int = 2          # Successes to close from half-open
     timeout_duration: int = 60          # Seconds to wait before half-open
-    request_timeout: int = 30           # Request timeout in seconds
+    request_timeout: int = 60           # Request timeout in seconds (some models are slower)
 
 
 class AIClient:
@@ -218,21 +218,28 @@ class AIClient:
             "Accept": "application/json",
         }
         
-        model = os.getenv('SHATHYAR_AI_MODEL') or 'doubao-seed-1-6-thinking-250715'
+        model = os.getenv('SHATHYAR_AI_MODEL') or 'doubao-seed-1-6-flash-250828'
         payload = {
             "model": model,
             "messages": [
                 {
                     "role": "system",
-                    "content": "You are an expert translator specializing in Chinese to Shathyar (World of Warcraft fictional language) translation. Provide accurate, contextual translations that capture the mystical and otherworldly nature of the Shathyar language."
+                    "content": (
+                        "You are an expert translator specializing in Chinese → Shathyar (World of Warcraft fictional language) translation. "
+                        "Provide accurate, contextual translations that capture the mystical and otherworldly nature of the Shathyar language. "
+                        "Important: The output MUST be natural-language-like Shathyar text, not code or structured data. Do NOT output JSON, key-value pairs, tags, XML/HTML, placeholders, or template-like strings. "
+                        "Preserve the source punctuation and clause boundaries: if the source uses commas/semicolons/ellipses/questions, reflect corresponding pauses or separators in the Shathyar output (comma, em dash, or ellipses), and do NOT collapse multi-clause sentences into a single clause. "
+                        "Vary syntax and structure inspired by the dictionary examples (e.g., reordering, connective particles, emphasis and pauses), and avoid mechanical character-by-character substitution. "
+                        "Only return the Shathyar translation text with no explanations."
+                    )
                 },
                 {
                     "role": "user", 
                     "content": prompt
                 }
             ],
-            "max_tokens": 500,
-            "temperature": 0.3,  # Lower temperature for more consistent translations
+            "max_tokens": 100,
+            "temperature": 0.1,  # Lower temperature for more consistent translations
             "top_p": 0.9
         }
         
@@ -247,23 +254,26 @@ class AIClient:
         ]
         last_error_text = None
         for url in candidates:
-            async with self._session.post(url, headers=headers, json=payload) as response:
-                if response.status == 200:
-                    return await response.json()
-                # Try next candidate on 404/405 path errors
-                if response.status in (404, 405):
-                    last_error_text = await response.text()
-                    continue
-                error_text = await response.text()
-                raise AIServiceError(f"API request failed: {response.status} - {error_text}")
+            try:
+                async with self._session.post(url, headers=headers, json=payload) as response:
+                    if response.status == 200:
+                        return await response.json()
+                    # Try next candidate on 404/405 path errors
+                    if response.status in (404, 405):
+                        last_error_text = await response.text()
+                        continue
+                    error_text = await response.text()
+                    raise AIServiceError(f"API request failed: {response.status} - {error_text}")
+            except asyncio.TimeoutError:
+                raise AIServiceError(f"AI request timed out after {self._timeout.total} seconds")
         # If all candidates failed with 404/405
         raise AIServiceError(f"API request failed: 404 - {last_error_text or 'Not Found'}")
     
-    def _build_chinese_to_shathyar_prompt(self, chinese_text: str, 
+    def _build_chinese_to_shathyar_prompt(self, chinese_text: str,
                                         dictionary_context: Dict = None) -> str:
         """Build AI prompt for Chinese to Shathyar translation according to PRD"""
         
-        # Base prompt exactly as specified in PRD
+        # Base prompt per PRD with seed examples
         base_prompt = f"""以下是魔兽世界中"沙斯亚尔语"的对照翻译：
 
 origin_CN,Snathyar,origin_EN
@@ -277,25 +287,60 @@ origin_CN,Snathyar,origin_EN
 哦死亡之翼！您忠实的仆人辜负了您！,Ez Shuul'wah! Sk'woth'gl yu'gaz yoh'ghyl iilth!,O Deathwing! Your faithful servant has failed you!
 凝视恩佐斯的内心吧。,Gul'kafh an'qov N'zoth.,Gaze into the heart of N'Zoth
 
-接下来你将收到一段用户文本，你要依据沙斯亚尔语，将用户输入的文本近似翻译成类似"沙斯亚尔语"的形式，然后返回。你的返回只需要沙斯亚尔语翻译内容，不需要回复多余的内容。
+接下来你将收到一段用户文本，你要依据沙斯亚尔语，将用户输入的文本近似翻译成类似"沙斯亚尔语"的形式，然后返回。
+
+请严格遵循以下要求：
+1) 不要输出任何代码或结构化数据（禁止 JSON、键值对、标签、占位符、模板串等）；
+2) 生成自然语言风格的沙斯亚尔语，参考上面的词典示例进行语法结构变换（如语序重组、使用连词、强调与停顿等），避免机械逐字替换；
+3) 保留原文的标点与句式停顿：原文若含逗号/分号/省略号/问句等，译文中须以相应的停顿或分隔（逗号、破折号、或省略号）体现，不得将多子句合并为一句；
+4) 仅输出沙斯亚尔语译文文本，不要附加解释、前后缀标记或其它说明。
 
 用户文本：{chinese_text}
 
 沙斯亚尔语翻译："""
         
-        # Add additional dictionary context if available
-        if dictionary_context and dictionary_context.get("sample_entries"):
-            additional_examples = []
-            for entry in dictionary_context["sample_entries"][:5]:
-                if entry.get('origin_cn') and entry.get('shathyar'):
-                    additional_examples.append(f"{entry['origin_cn']},{entry['shathyar']},{entry.get('origin_en', '')}")
-            
-            if additional_examples:
-                base_prompt = base_prompt.replace(
-                    "凝视恩佐斯的内心吧。,Gul'kafh an'qov N'zoth.,Gaze into the heart of N'Zoth",
-                    "凝视恩佐斯的内心吧。,Gul'kafh an'qov N'zoth.,Gaze into the heart of N'Zoth\n" + "\n".join(additional_examples)
-                )
-        
+        # Enrich with official dictionary context per PRD, within token budget
+        ctx = dictionary_context or {}
+        samples: List[Dict[str, Any]] = ctx.get("sample_entries", []) or []
+        relevant: List[Dict[str, Any]] = ctx.get("relevant_entries", []) or []
+        patterns: Dict[str, Any] = ctx.get("patterns", {}) or {}
+
+        # 1) Build additional reference lines (relevant first, then full/deduped samples)
+        lines: List[str] = []
+        seen = set()
+        def add_line(e: Dict[str, Any]):
+            cn = (e.get('origin_cn') or '').strip()
+            sh = (e.get('shathyar') or '').strip()
+            en = (e.get('origin_en') or '').strip() if e.get('origin_en') else ''
+            key = (cn, sh)
+            if cn and sh and key not in seen:
+                seen.add(key)
+                lines.append(f"{cn},{sh},{en}")
+
+        # Add all relevant entries (small set)
+        for e in relevant:
+            add_line(e)
+        # Then add remaining samples (may be full dictionary)
+        for e in samples:
+            add_line(e)
+
+        if lines:
+            anchor = "凝视恩佐斯的内心吧。,Gul'kafh an'qov N'zoth.,Gaze into the heart of N'Zoth"
+            base_prompt = base_prompt.replace(anchor, anchor + "\n" + "\n".join(lines))
+
+        # 2) Insert compact pattern hints before the instruction block
+        if patterns:
+            common_sh = patterns.get('common_shathyar_chars') or []
+            ratio = patterns.get('average_length_ratio')
+            hints = []
+            if common_sh:
+                hints.append(f"常见沙斯亚尔语字符: {', '.join(common_sh[:10])}")
+            if ratio:
+                hints.append(f"平均长度比(Shathyar:Chinese): {ratio}:1")
+            if hints:
+                insertion = "【字典参考】\n- " + "\n- ".join(hints) + "\n\n接下来你将收到"
+                base_prompt = base_prompt.replace("接下来你将收到", insertion)
+
         return base_prompt
     
     def _build_shathyar_to_chinese_prompt(self, shathyar_text: str,

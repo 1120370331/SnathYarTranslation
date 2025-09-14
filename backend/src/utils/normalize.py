@@ -14,8 +14,15 @@ so that queries can leverage precomputed normalized columns + indices.
 import string
 
 # Common ASCII punctuation + common Chinese punctuation + whitespace
+# Common Chinese punctuation plus extra look‑alike marks
 _CHINESE_PUNCTS = "，。！？；：、（）【】《》〈〉—…·『』「」“”‘’　"
-_PUNCTUATIONS = string.punctuation + _CHINESE_PUNCTS + "\t\n\r "
+
+# Extra apostrophe/hyphen lookalikes seen in copy/paste text
+# \u02BC: modifier letter apostrophe; \u02B9: modifier letter prime; \u201B: single high-reversed-9 quotation mark
+# Various hyphen/minus dashes to normalize away
+_EXTRA_STRIP = "ʼʹˈ`´ʾʿ‧‐‑‒–—―−﹘﹣"
+
+_PUNCTUATIONS = string.punctuation + _CHINESE_PUNCTS + _EXTRA_STRIP + "\t\n\r "
 _TRANS_TABLE = str.maketrans('', '', _PUNCTUATIONS)
 
 

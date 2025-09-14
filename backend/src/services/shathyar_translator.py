@@ -16,6 +16,7 @@ from ..models.translation_entry import TranslationEntry
 from ..models.official_dictionary import OfficialDictionary
 import re
 import string
+from ..utils.normalize import normalize_text
 
 
 class TranslationSource(Enum):
@@ -307,9 +308,17 @@ class ShathyarTranslator:
         
         # Step 3: Generate AI translation (FR-005)
         try:
+            # Build dictionary context for AI prompt (full export per PRD, dictionary is small)
+            ctx = self.dictionary_reader.get_context(include_all=True)
+            try:
+                relevant = self.dictionary_reader.search_chinese(chinese_text, exact_match=False, limit=100)
+                ctx["relevant_entries"] = [e.to_dict() for e in relevant]
+            except Exception:
+                ctx["relevant_entries"] = []
+
             ai_result = await self.ai_client.translate_chinese_to_shathyar(
-                chinese_text, 
-                dictionary_context=self.dictionary_reader.get_context()
+                chinese_text,
+                dictionary_context=ctx
             )
             
             # Create new translation entry (not yet confirmed)
@@ -503,19 +512,10 @@ class ShathyarTranslator:
             ).first()
 
     # --- Fuzzy helpers (punctuation forgiveness) ---
-    _punct_table = str.maketrans('', '', string.punctuation + '，。！？；：、“”‘’、（）【】《》〈〉—…·· ' + "'\"\t\n\r")
-
     @classmethod
     def _normalize_for_match(cls, s: str) -> str:
-        """Lowercase and remove punctuation/whitespace for forgiving comparisons."""
-        if not s:
-            return ''
-        # Lower and strip then remove punctuation and spaces (incl. Chinese punct.)
-        lowered = s.lower().strip()
-        # Remove common punctuation (including apostrophes) and whitespace
-        cleaned = lowered.translate(cls._punct_table)
-        # Collapse any residual multiple spaces (should be none after translate)
-        return cleaned
+        """Use shared normalizer so DB columns and queries stay consistent."""
+        return normalize_text(s)
 
     def _find_dictionary_fuzzy_shathyar(self, shathyar_text: str) -> Optional[OfficialDictionary]:
         target_norm = self._normalize_for_match(shathyar_text)
