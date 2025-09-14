@@ -21,7 +21,7 @@ DB_URL="${SHATHYAR_DB_URL:-}"   # optional custom DB URL
 DETACH="${DETACH:-1}"
 
 install_docker() {
-  if command -v docker >/dev/null 2}&1; then
+  if command -v docker >/dev/null 2>&1; then
     return 0
   fi
   echo "[backend][deploy] Docker not found. Installing..."
@@ -69,17 +69,68 @@ install_docker() {
   fi
 }
 
+# Configure Docker registry mirrors for China if requested
+configure_docker_mirrors() {
+  local enable_cn="${CN_MIRROR:-}"
+  if [ -z "$enable_cn" ] && [ "${DOCKER_INSTALL_MIRROR:-}" = "cn" ]; then
+    enable_cn=1
+  fi
+  if [ -z "$enable_cn" ]; then
+    return 0
+  fi
+
+  local mirrors_csv
+  mirrors_csv="${DOCKER_REGISTRY_MIRRORS:-https://docker.mirrors.ustc.edu.cn,https://hub-mirror.c.163.com,https://mirror.ccs.tencentyun.com,https://registry.docker-cn.com}"
+  # Convert CSV to JSON array entries
+  IFS=',' read -r -a arr <<< "$mirrors_csv"
+  local json_list=""
+  for m in "${arr[@]}"; do
+    m_trimmed="${m//\ /}"
+    if [ -n "$m_trimmed" ]; then
+      if [ -n "$json_list" ]; then json_list+=" , "; fi
+      json_list+="\"$m_trimmed\""
+    fi
+  done
+
+  echo "[backend][deploy] Configuring Docker registry mirrors: [$mirrors_csv]"
+  mkdir -p /etc/docker
+  if [ -f /etc/docker/daemon.json ]; then
+    cp /etc/docker/daemon.json /etc/docker/daemon.json.bak || true
+  fi
+  cat > /etc/docker/daemon.json <<JSON
+{
+  "registry-mirrors": [ $json_list ]
+}
+JSON
+
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl restart docker || true
+  elif command -v service >/dev/null 2>&1; then
+    service docker restart || true
+  fi
+}
+
 ensure_docker() {
   install_docker
   if ! command -v docker >/dev/null 2>&1; then
     echo "[backend][deploy] ERROR: Docker installation failed or is unavailable." >&2
     exit 1
   fi
+  configure_docker_mirrors || true
 }
 
 docker_build() {
   echo "[backend][deploy] Building image: $IMAGE_NAME"
-  docker build -t "$IMAGE_NAME" "$SCRIPT_DIR"
+  local build_args=()
+  if [ -n "${PIP_INDEX_URL:-}" ]; then
+    build_args+=( --build-arg PIP_INDEX_URL="$PIP_INDEX_URL" )
+  elif [ -n "${CN_MIRROR:-}" ] || [ "${DOCKER_INSTALL_MIRROR:-}" = "cn" ]; then
+    build_args+=( --build-arg PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple )
+  fi
+  if [ -n "${PIP_EXTRA_INDEX_URL:-}" ]; then
+    build_args+=( --build-arg PIP_EXTRA_INDEX_URL="$PIP_EXTRA_INDEX_URL" )
+  fi
+  docker build "${build_args[@]}" -t "$IMAGE_NAME" "$SCRIPT_DIR"
 }
 
 docker_run() {
