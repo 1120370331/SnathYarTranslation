@@ -32,12 +32,39 @@ LOG_DIR="${LOG_DIR:-$HOME/project/logs}"
 LOG_FILE="$LOG_DIR/backend.log"
 PID_FILE="$LOG_DIR/backend.pid"
 
+# Ensure runtime has uvicorn available
+ensure_runtime() {
+  # Prefer project venv
+  if [ ! -x "$SCRIPT_DIR/venv/bin/python" ]; then
+    # Try to create venv (may fail if python3-venv is missing)
+    command -v python3 >/dev/null 2>&1 || true
+    python3 -m ensurepip --upgrade >/dev/null 2>&1 || true
+    python3 -m venv "$SCRIPT_DIR/venv" >/dev/null 2>&1 || true
+  fi
+
+  if [ -x "$SCRIPT_DIR/venv/bin/python" ]; then
+    # Install deps into venv if uvicorn missing
+    if ! "$SCRIPT_DIR/venv/bin/python" -c 'import uvicorn' >/dev/null 2>&1; then
+      echo "[backend][entrypoint] Installing deps into venv"
+      "$SCRIPT_DIR/venv/bin/python" -m pip install -U pip >/dev/null 2>&1 || true
+      "$SCRIPT_DIR/venv/bin/python" -m pip install -e . >/dev/null 2>&1 || true
+    fi
+    PY="$SCRIPT_DIR/venv/bin/python"
+    return
+  fi
+
+  # Fallback: break PEP 668 for system/user install as last resort
+  if ! python3 -c 'import uvicorn' >/dev/null 2>&1; then
+    echo "[backend][entrypoint] Fallback installing deps to system/user site (PEP 668 override)"
+    PIP_BREAK_SYSTEM_PACKAGES=1 python3 -m ensurepip --upgrade >/dev/null 2>&1 || true
+    PIP_BREAK_SYSTEM_PACKAGES=1 python3 -m pip install -U pip setuptools wheel >/dev/null 2>&1 || true
+    PIP_BREAK_SYSTEM_PACKAGES=1 python3 -m pip install -e . >/dev/null 2>&1 || true
+  fi
+  PY=python3
+}
+
 PY=python3
-if [ -x "$SCRIPT_DIR/venv/bin/python" ]; then
-  PY="$SCRIPT_DIR/venv/bin/python"
-elif ! command -v python3 >/dev/null 2>&1; then
-  PY=python
-fi
+ensure_runtime
 
 start() {
   echo "[backend][entrypoint] Starting Uvicorn on ${HOST}:${PORT} (workers=${WORKERS})"
