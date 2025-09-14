@@ -4,7 +4,7 @@
  * Global error boundary with mystical theming for graceful error handling
  */
 
-import React, { Component, ErrorInfo, ReactNode } from 'react'
+import { Component, ErrorInfo, ReactNode } from 'react'
 
 interface Props {
   children: ReactNode

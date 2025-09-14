@@ -31,8 +31,9 @@ export interface QuotaStatus {
   is_blocked?: boolean
 }
 
+const API_BASE = (import.meta as any)?.env?.VITE_API_BASE_URL || '/api/v1'
 const http = axios.create({
-  baseURL: '/api/v1',
+  baseURL: API_BASE,
   timeout: 15000,
 })
 
@@ -185,7 +186,7 @@ export const apiClient = {
     }
   },
 
-  async confirmTranslation(translationId: string, editedText: string, originalChinese: string): Promise<TranslationResponse> {
+  async confirmTranslation(translationId: string, editedText: string, _originalChinese: string): Promise<TranslationResponse> {
     try {
       const { data } = await http.post(`/translate/${encodeURIComponent(translationId)}/confirm`, {
         edited_text: editedText,
