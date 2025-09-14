@@ -117,6 +117,35 @@ ensure_docker() {
     exit 1
   fi
   configure_docker_mirrors || true
+  ensure_docker_daemon || true
+}
+
+# Ensure docker daemon is running in environments without systemd
+ensure_docker_daemon() {
+  if docker info >/dev/null 2>&1; then
+    return 0
+  fi
+  echo "[backend][deploy] Docker daemon not running. Attempting to start..."
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl start docker || true
+  elif command -v service >/dev/null 2>&1; then
+    service docker start || true
+  fi
+  # If still not running, try launching dockerd directly (no systemd)
+  if ! docker info >/dev/null 2>&1; then
+    echo "[backend][deploy] Launching dockerd (no systemd). Using storage-driver=vfs as fallback."
+    nohup dockerd --host=unix:///var/run/docker.sock --storage-driver=vfs >>/var/log/dockerd.log 2>&1 &
+  fi
+  # Wait for daemon to be ready
+  for i in $(seq 1 20); do
+    if docker info >/dev/null 2>&1; then
+      echo "[backend][deploy] Docker daemon is up."
+      return 0
+    fi
+    sleep 1
+  done
+  echo "[backend][deploy] WARN: Could not confirm docker daemon is running. 'docker build' may fail." >&2
+  return 1
 }
 
 docker_build() {
