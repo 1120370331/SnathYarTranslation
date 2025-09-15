@@ -12,6 +12,7 @@ src/services/ai_client.py
 src/services/dictionary_reader.py
 src/services/rate_limiter.py
 src/services/shathyar_translator.py
+src/services/translation_rag.py
 src/shathyar_translator.egg-info/PKG-INFO
 src/shathyar_translator.egg-info/SOURCES.txt
 src/shathyar_translator.egg-info/dependency_links.txt

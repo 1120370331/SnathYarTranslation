@@ -272,103 +272,87 @@ class AIClient:
     
     def _build_chinese_to_shathyar_prompt(self, chinese_text: str,
                                         dictionary_context: Dict = None) -> str:
-        """Build AI prompt for Chinese to Shathyar translation according to PRD"""
+        """Build AI prompt for Chinese to Shathyar translation with optimized structure"""
         
-        # Base prompt per PRD with seed examples
-        base_prompt = f"""以下是魔兽世界中"沙斯亚尔语"的对照翻译：
-
-origin_CN,Snathyar,origin_EN
-我在你肺里安家了！,Aglathrax hig' thrixa.,I reside within your lungs!
-我们的数量无穷无尽我们的力量超乎想象！所有敢于和灭世者作对的人都将被千刀万剐！,Ak'agthshi ma uhnish ak'uq shg'cul vwahuhn! H'iwn iggksh Phquathi gag OOU KAAXTH SHUUL!,Our numbers are endless our power beyond reckoning! All who oppose the Destroyer will DIE A THOUSAND DEATHS!
-这是真的还是幻觉？你疯了……疯了……疯了……,Al'ksh syq iir awan? Iilth sythn aqev... aqev... aqev...,Is this real or an illusion? You are going mad... mad... mad...
-戈霍恩是无法阻止的……,AN'zig wgah qam za zyqtahg...,
-没有什么能够阻止我的瘟疫！,Awtgssh shn ongg shg'ullwaq!,
-你的盟友喜欢看着你死去。,Bwaxa za' raga xil!,
-我会在黑暗中……等你……,Bwixki amala zal qulllll...,I will await you... in the dark...
-哦死亡之翼！您忠实的仆人辜负了您！,Ez Shuul'wah! Sk'woth'gl yu'gaz yoh'ghyl iilth!,O Deathwing! Your faithful servant has failed you!
-凝视恩佐斯的内心吧。,Gul'kafh an'qov N'zoth.,Gaze into the heart of N'Zoth"""
-        
-        # 添加RAG相似翻译信息
-        rag_context = dictionary_context.get("rag_context", {}) if dictionary_context else {}
-        similar_translations = rag_context.get("similar_translations", [])
-        
-        if similar_translations:
-            base_prompt += "\n\n【相似翻译参考】（优先参考用户确认的翻译）\n"
-            for i, st in enumerate(similar_translations, 1):
-                user_mark = "✓用户确认" if st["is_user_confirmed"] else "AI生成"
-                base_prompt += f"{i}. {st['source_text']} → {st['translated_text']} ({user_mark}, 相似度:{st['similarity_score']})\n"
-        
-        base_prompt += f"""
-
-接下来你将收到一段用户文本，你要依据沙斯亚尔语，将用户输入的文本近似翻译成类似"沙斯亚尔语"的形式，然后返回。
-
-请严格遵循以下要求：
-1) 不要输出任何代码或结构化数据（禁止 JSON、键值对、标签、占位符、模板串等）；
-2) 生成自然语言风格的沙斯亚尔语，参考上面的词典示例进行语法结构变换（如语序重组、使用连词、强调与停顿等），避免机械逐字替换；
-3) 保留原文的标点与句式停顿：原文若含逗号/分号/省略号/问句等，译文中须以相应的停顿或分隔（逗号、破折号、或省略号）体现，不得将多子句合并为一句；
-4) 仅输出沙斯亚尔语译文文本，不要附加解释、前后缀标记或其它说明；
-5) 对于已存在于词典的词汇、句子，必须复用词典中已有的字词语；
-6) 【重要】如果相似翻译参考中有高度相关的内容，优先借鉴其翻译风格和用词，特别是用户确认的翻译。
-
-用户文本：{chinese_text}
-
-沙斯亚尔语翻译："""
-        
-        # Enrich with official dictionary context per PRD, within token budget
         ctx = dictionary_context or {}
-        samples: List[Dict[str, Any]] = ctx.get("sample_entries", []) or []
-        relevant: List[Dict[str, Any]] = ctx.get("relevant_entries", []) or []
-        patterns: Dict[str, Any] = ctx.get("patterns", {}) or {}
-
-        # 1) Build additional reference lines (relevant first, then full/deduped samples)
-        lines: List[str] = []
-        seen = set()
-        def add_line(e: Dict[str, Any]):
-            cn = (e.get('origin_cn') or '').strip()
-            sh = (e.get('shathyar') or '').strip()
-            en = (e.get('origin_en') or '').strip() if e.get('origin_en') else ''
-            key = (cn, sh)
-            if cn and sh and key not in seen:
-                seen.add(key)
-                lines.append(f"{cn},{sh},{en}")
-
-        # Add all relevant entries (small set)
-        for e in relevant:
-            add_line(e)
-        # Then add remaining samples (may be full dictionary)
-        for e in samples:
-            add_line(e)
-
-        if lines:
-            anchor = "凝视恩佐斯的内心吧。,Gul'kafh an'qov N'zoth.,Gaze into the heart of N'Zoth"
-            base_prompt = base_prompt.replace(anchor, anchor + "\n" + "\n".join(lines))
-
-        # 2) Insert compact pattern hints before the instruction block
-        if patterns:
-            common_sh = patterns.get('common_shathyar_chars') or []
-            ratio = patterns.get('average_length_ratio')
-            hints = []
-            if common_sh:
-                hints.append(f"常见沙斯亚尔语字符: {', '.join(common_sh[:10])}")
-            if ratio:
-                hints.append(f"平均长度比(Shathyar:Chinese): {ratio}:1")
-            if hints:
-                insertion = "【字典参考】\n- " + "\n- ".join(hints) + "\n\n接下来你将收到"
-                base_prompt = base_prompt.replace("接下来你将收到", insertion)
-
-        # 3) Inject mandatory glossary constraints to enforce exact reuse of official terms
-        glossary: List[Dict[str, Any]] = ctx.get("glossary", []) if isinstance(ctx, dict) else []
+        
+        # 🎯 第一优先级：强制词汇映射表 (最高优先级)
+        glossary: List[Dict[str, Any]] = ctx.get("glossary", [])
+        mandatory_mappings = []
         if glossary:
-            lines = [f"- {g.get('origin_cn','').strip()} => {g.get('shathyar','').strip()}" for g in glossary if g.get('origin_cn') and g.get('shathyar')]
-            if lines:
-                constraint = (
-                    "请严格遵循以下要求：\n"
-                    "6) 当源文本包含以下中文专有名词时，译文必须严格使用对应的 Shathyar 写法（大小写与撇号须完全一致）：\n"
-                    + "\n".join(lines) + "\n\n"
-                )
-                base_prompt = base_prompt.replace("请严格遵循以下要求：", constraint)
-
-        return base_prompt
+            for g in glossary:
+                cn = g.get('origin_cn', '').strip()
+                sh = g.get('shathyar', '').strip()
+                if cn and sh:
+                    mandatory_mappings.append(f"  {cn} → {sh}")
+        
+        # 🔍 第二优先级：RAG相似翻译参考
+        rag_context = ctx.get("rag_context", {})
+        similar_translations = rag_context.get("similar_translations", [])
+        rag_references = []
+        if similar_translations:
+            for i, st in enumerate(similar_translations[:3], 1):  # 限制为最相关的3个
+                user_mark = "✓用户确认" if st["is_user_confirmed"] else "AI生成"
+                rag_references.append(f"  {st['source_text']} → {st['translated_text']} ({user_mark})")
+        
+        # 📚 第三优先级：相关词典条目 (精选，避免信息过载)
+        relevant_entries = ctx.get("relevant_entries", [])[:10]  # 限制为最相关的10个
+        dict_examples = []
+        for entry in relevant_entries:
+            cn = entry.get('origin_cn', '').strip()
+            sh = entry.get('shathyar', '').strip()
+            if cn and sh:
+                dict_examples.append(f"  {cn} → {sh}")
+        
+        # 🏗️ 构建优化的prompt结构
+        prompt_parts = []
+        
+        # === 核心约束部分（最重要） ===
+        prompt_parts.append("【核心翻译约束 - 必须严格遵循】")
+        
+        if mandatory_mappings:
+            prompt_parts.append("🔒 强制词汇映射（必须精确使用）：")
+            prompt_parts.extend(mandatory_mappings)
+            prompt_parts.append("")
+        
+        if rag_references:
+            prompt_parts.append("🎯 优先参考翻译（保持风格一致）：")
+            prompt_parts.extend(rag_references)
+            prompt_parts.append("")
+        
+        # === 基础示例部分 ===
+        prompt_parts.append("【Shathyar语言基础示例】")
+        prompt_parts.append("我在你肺里安家了！ → Aglathrax hig' thrixa.")
+        prompt_parts.append("我会在黑暗中……等你…… → Bwixki amala zal qulllll...")
+        prompt_parts.append("没有什么能够阻止我的瘟疫！ → Awtgssh shn ongg shg'ullwaq!")
+        prompt_parts.append("凝视恩佐斯的内心吧。 → Gul'kafh an'qov N'zoth.")
+        prompt_parts.append("")
+        
+        # === 相关词典参考 ===
+        if dict_examples:
+            prompt_parts.append("【相关词典参考】")
+            prompt_parts.extend(dict_examples)
+            prompt_parts.append("")
+        
+        # === 翻译指令部分 ===
+        prompt_parts.append("【翻译任务】")
+        prompt_parts.append(f"请将以下中文翻译为Shathyar语：{chinese_text}")
+        prompt_parts.append("")
+        
+        # === 强化约束说明 ===
+        constraints = [
+            "⚠️ 绝对要求：",
+            "1. 如果输入包含上述【强制词汇映射】中的词汇，必须使用对应的Shathyar写法",
+            "2. 优先借鉴【优先参考翻译】的风格和用词选择", 
+            "3. 参考【相关词典参考】中的词汇表达方式",
+            "4. 保持神秘、古老的语言风格",
+            "5. 只输出Shathyar翻译结果，不要任何解释",
+            "",
+            "🎯 翻译："
+        ]
+        prompt_parts.extend(constraints)
+        
+        return "\n".join(prompt_parts)
     
     def _build_shathyar_to_chinese_prompt(self, shathyar_text: str,
                                         dictionary_context: Dict = None) -> str:

@@ -1,8 +1,6 @@
 api
-cli
 db
 main
-middleware
 models
 services
 utils
