@@ -220,28 +220,29 @@ class AIClient:
         
         model = os.getenv('SHATHYAR_AI_MODEL') or 'doubao-seed-1-6-flash-250828'
         payload = {
-            "model": model,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "You are an expert translator specializing in Chinese → Shathyar (World of Warcraft fictional language) translation. "
-                        "Provide accurate, contextual translations that capture the mystical and otherworldly nature of the Shathyar language. "
-                        "Important: The output MUST be natural-language-like Shathyar text, not code or structured data. Do NOT output JSON, key-value pairs, tags, XML/HTML, placeholders, or template-like strings. "
-                        "Preserve the source punctuation and clause boundaries: if the source uses commas/semicolons/ellipses/questions, reflect corresponding pauses or separators in the Shathyar output (comma, em dash, or ellipses), and do NOT collapse multi-clause sentences into a single clause. "
+                "model": model,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are an expert translator specializing in Chinese → Shathyar (World of Warcraft fictional language) translation. "
+                            "Provide accurate, contextual translations that capture the mystical and otherworldly nature of the Shathyar language. "
+                            "Important: The output MUST be natural-language-like Shathyar text, not code or structured data. Do NOT output JSON, key-value pairs, tags, XML/HTML, placeholders, or template-like strings. "
+                            "Preserve the source punctuation and clause boundaries: if the source uses commas/semicolons/ellipses/questions, reflect corresponding pauses or separators in the Shathyar output (comma, em dash, or ellipses), and do NOT collapse multi-clause sentences into a single clause. "
                         "Vary syntax and structure inspired by the dictionary examples (e.g., reordering, connective particles, emphasis and pauses), and avoid mechanical character-by-character substitution. "
-                        "Only return the Shathyar translation text with no explanations."
-                    )
-                },
-                {
-                    "role": "user", 
-                    "content": prompt
-                }
-            ],
-            "max_tokens": 100,
-            "temperature": 0.1,  # Lower temperature for more consistent translations
-            "top_p": 0.9
-        }
+                        "When a term or sentence exists in the provided dictionary examples, you MUST reuse the dictionary's existing wording and spelling to ensure consistency. "
+                            "Only return the Shathyar translation text with no explanations."
+                        )
+                    },
+                    {
+                        "role": "user", 
+                        "content": prompt
+                    }
+                ],
+                "max_tokens": 100,
+                "temperature": 0.1,  # Lower temperature for more consistent translations
+                "top_p": 0.9
+            }
         
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession(timeout=self._timeout, connector=self._connector)
@@ -293,7 +294,8 @@ origin_CN,Snathyar,origin_EN
 1) 不要输出任何代码或结构化数据（禁止 JSON、键值对、标签、占位符、模板串等）；
 2) 生成自然语言风格的沙斯亚尔语，参考上面的词典示例进行语法结构变换（如语序重组、使用连词、强调与停顿等），避免机械逐字替换；
 3) 保留原文的标点与句式停顿：原文若含逗号/分号/省略号/问句等，译文中须以相应的停顿或分隔（逗号、破折号、或省略号）体现，不得将多子句合并为一句；
-4) 仅输出沙斯亚尔语译文文本，不要附加解释、前后缀标记或其它说明。
+4) 仅输出沙斯亚尔语译文文本，不要附加解释、前后缀标记或其它说明；
+5) 对于已存在于词典的词汇、句子，必须复用词典中已有的字词语。
 
 用户文本：{chinese_text}
 
@@ -355,7 +357,8 @@ Requirements:
 1. Provide ONLY the Chinese translation, no explanations
 2. Use natural, fluent Chinese
 3. Capture the meaning and tone appropriately
-4. Be concise but accurate"""
+4. Be concise but accurate
+5. If terms/phrases/sentences exist in the provided dictionary examples, you MUST reuse the dictionary's existing wording and spelling for consistency"""
         
         if dictionary_context and dictionary_context.get("sample_entries"):
             context_examples = []
