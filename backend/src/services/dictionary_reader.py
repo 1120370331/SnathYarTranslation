@@ -324,6 +324,60 @@ class DictionaryReader:
             query = query.filter(OfficialDictionary.norm_shathyar.like(f"%{norm}%"))
         
         return query.limit(limit).all()
+
+    def find_relevant_by_cn_substring(self, text: str, limit: int = 100) -> List[OfficialDictionary]:
+        """Find entries whose normalized Chinese appears within the given sentence.
+
+        This fixes the directionality issue where searching by the full sentence would
+        not match shorter dictionary items like proper nouns (e.g., 恩佐斯 → N'Zoth).
+        """
+        if not text or not text.strip():
+            return []
+
+        norm_sentence = normalize_text(text)
+        # Fetch a reasonable number of entries and filter in Python for substring match
+        # Order by longer Chinese first to prefer longer matches
+        all_entries = self.db_session.query(OfficialDictionary).all()
+        matches: List[OfficialDictionary] = []
+        seen = set()
+        for e in sorted(all_entries, key=lambda x: len(x.norm_origin_cn or ""), reverse=True):
+            ncn = e.norm_origin_cn or normalize_text(e.origin_cn or '')
+            if not ncn:
+                continue
+            if ncn in norm_sentence:
+                key = (ncn, e.norm_shathyar or normalize_text(e.shathyar or ''))
+                if key not in seen:
+                    seen.add(key)
+                    matches.append(e)
+                if len(matches) >= limit:
+                    break
+        return matches
+
+    def extract_glossary_for_chinese(self, text: str, max_terms: int = 20) -> List[Dict[str, str]]:
+        """Build a glossary list of CN→Shathyar terms that appear in the input sentence.
+
+        Prioritize curated proper nouns and longer matches. Deduplicate.
+        """
+        relevant = self.find_relevant_by_cn_substring(text, limit=200)
+        # prefer curated entries first
+        curated = [e for e in relevant if (e.checksum or '').startswith('curated_')]
+        others = [e for e in relevant if e not in curated]
+        ordered = curated + others
+        glossary: List[Dict[str, str]] = []
+        seen_cn = set()
+        for e in ordered:
+            cn = (e.origin_cn or '').strip()
+            sh = (e.shathyar or '').strip()
+            if not cn or not sh:
+                continue
+            ncn = normalize_text(cn)
+            if ncn in seen_cn:
+                continue
+            seen_cn.add(ncn)
+            glossary.append({"origin_cn": cn, "shathyar": sh})
+            if len(glossary) >= max_terms:
+                break
+        return glossary
     
     def find_exact_match(self, text: str, language: str) -> Optional[OfficialDictionary]:
         """

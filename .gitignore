@@ -1,6 +1,10 @@
 # Frontend dependencies
 **/node_modules/
 
+# Backend virtual environment
+backend/venv/
+**/venv/
+
 # Private materials
 /private/
 
@@ -8,3 +12,43 @@
 .env
 .env.*
 !*.example
+env.production
+
+# Python build artifacts
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.pyd
+*.so
+build/
+dist/
+*.egg-info/
+**/*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+backend/venv/
+
+# Python tooling caches
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Frontend build outputs
+frontend/dist/
+frontend/.vite/
+**/dist/
+**/.vite/
+
+# Coverage reports
+coverage/
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db

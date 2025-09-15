@@ -313,10 +313,14 @@ class ShathyarTranslator:
             # Build dictionary context for AI prompt (full export per PRD, dictionary is small)
             ctx = self.dictionary_reader.get_context(include_all=True)
             try:
-                relevant = self.dictionary_reader.search_chinese(chinese_text, exact_match=False, limit=100)
+                # Use substring-based relevance to include proper nouns within sentences
+                relevant = self.dictionary_reader.find_relevant_by_cn_substring(chinese_text, limit=100)
                 ctx["relevant_entries"] = [e.to_dict() for e in relevant]
+                # Build a mandatory glossary to enforce exact reuse of official terms
+                ctx["glossary"] = self.dictionary_reader.extract_glossary_for_chinese(chinese_text, max_terms=20)
             except Exception:
                 ctx["relevant_entries"] = []
+                ctx["glossary"] = []
 
             # RAG: 检索相似翻译历史作为AI参考信息
             try:

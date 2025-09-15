@@ -356,6 +356,18 @@ origin_CN,Snathyar,origin_EN
                 insertion = "【字典参考】\n- " + "\n- ".join(hints) + "\n\n接下来你将收到"
                 base_prompt = base_prompt.replace("接下来你将收到", insertion)
 
+        # 3) Inject mandatory glossary constraints to enforce exact reuse of official terms
+        glossary: List[Dict[str, Any]] = ctx.get("glossary", []) if isinstance(ctx, dict) else []
+        if glossary:
+            lines = [f"- {g.get('origin_cn','').strip()} => {g.get('shathyar','').strip()}" for g in glossary if g.get('origin_cn') and g.get('shathyar')]
+            if lines:
+                constraint = (
+                    "请严格遵循以下要求：\n"
+                    "6) 当源文本包含以下中文专有名词时，译文必须严格使用对应的 Shathyar 写法（大小写与撇号须完全一致）：\n"
+                    + "\n".join(lines) + "\n\n"
+                )
+                base_prompt = base_prompt.replace("请严格遵循以下要求：", constraint)
+
         return base_prompt
     
     def _build_shathyar_to_chinese_prompt(self, shathyar_text: str,
