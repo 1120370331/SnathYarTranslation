@@ -42,6 +42,13 @@ frontend/.vite/
 **/dist/
 **/.vite/
 
+# SQLite databases and journals (do not track DB files)
+*.db
+*.sqlite
+*.sqlite3
+*.db-wal
+*.db-shm
+
 # Coverage reports
 coverage/
 
