@@ -25,8 +25,8 @@ export const useTranslation = (): UseTranslationResult => {
     mutationFn: (payload: TranslationRequest) => apiClient.translate(payload),
     onSuccess: () => {
       // Keep magic power indicator and any history in sync
-      queryClient.invalidateQueries(['magic-power'])
-      queryClient.invalidateQueries(['translation-history'])
+      queryClient.invalidateQueries({ queryKey: ['magic-power'] })
+      queryClient.invalidateQueries({ queryKey: ['translation-history'] })
     },
     onError: (error) => {
       console.error('Translation failed:', error)
@@ -37,7 +37,7 @@ export const useTranslation = (): UseTranslationResult => {
     mutate: mutation.mutate,
     mutateAsync: mutation.mutateAsync,
     data: mutation.data,
-    isLoading: mutation.isLoading,
+    isLoading: (mutation as any).isLoading ?? (mutation as any).isPending ?? false,
     error: mutation.error as any,
     reset: mutation.reset,
   }
@@ -50,8 +50,7 @@ export const useConfirmTranslation = () => {
     mutationFn: ({ translationId, editedText, originalChinese }: { translationId: string; editedText: string; originalChinese: string }) =>
       apiClient.confirmTranslation(translationId, editedText, originalChinese),
     onSuccess: () => {
-      queryClient.invalidateQueries(['translation-history'])
+      queryClient.invalidateQueries({ queryKey: ['translation-history'] })
     },
   })
 }
-
