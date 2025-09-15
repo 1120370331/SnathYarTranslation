@@ -18,23 +18,25 @@ export async function loadAppConfig(): Promise<AppConfig> {
     if (res.ok) {
       const json = await res.json()
       cached = {
-        apiBaseUrl: (json.apiBaseUrl || '').toString().replace(/\/$/, '') ||
-          (typeof import !== 'undefined' && (import.meta as any)?.env?.VITE_API_BASE_URL) ||
+        apiBaseUrl:
+          (json.apiBaseUrl || '').toString().replace(/\/$/, '') ||
+          ((import.meta as any)?.env?.VITE_API_BASE_URL as string | undefined) ||
           defaultConfig.apiBaseUrl,
-        basePath: (json.basePath || '').toString() ||
-          (typeof import !== 'undefined' && (import.meta as any)?.env?.VITE_BASE_PATH) ||
+        basePath:
+          (json.basePath || '').toString() ||
+          ((import.meta as any)?.env?.VITE_BASE_PATH as string | undefined) ||
           defaultConfig.basePath,
       }
     } else {
       cached = {
-        apiBaseUrl: ((typeof import !== 'undefined' && (import.meta as any)?.env?.VITE_API_BASE_URL) || defaultConfig.apiBaseUrl).toString().replace(/\/$/, ''),
-        basePath: ((typeof import !== 'undefined' && (import.meta as any)?.env?.VITE_BASE_PATH) || defaultConfig.basePath).toString(),
+        apiBaseUrl: ((((import.meta as any)?.env?.VITE_API_BASE_URL as string | undefined) || defaultConfig.apiBaseUrl)).toString().replace(/\/$/, ''),
+        basePath: ((((import.meta as any)?.env?.VITE_BASE_PATH as string | undefined) || defaultConfig.basePath)).toString(),
       }
     }
   } catch {
     cached = {
-      apiBaseUrl: ((typeof import !== 'undefined' && (import.meta as any)?.env?.VITE_API_BASE_URL) || defaultConfig.apiBaseUrl).toString().replace(/\/$/, ''),
-      basePath: ((typeof import !== 'undefined' && (import.meta as any)?.env?.VITE_BASE_PATH) || defaultConfig.basePath).toString(),
+      apiBaseUrl: ((((import.meta as any)?.env?.VITE_API_BASE_URL as string | undefined) || defaultConfig.apiBaseUrl)).toString().replace(/\/$/, ''),
+      basePath: ((((import.meta as any)?.env?.VITE_BASE_PATH as string | undefined) || defaultConfig.basePath)).toString(),
     }
   }
   ;(window as any).__APP_CONFIG__ = cached
@@ -44,4 +46,3 @@ export async function loadAppConfig(): Promise<AppConfig> {
 export function getAppConfig(): AppConfig {
   return (window as any).__APP_CONFIG__ || cached || defaultConfig
 }
-

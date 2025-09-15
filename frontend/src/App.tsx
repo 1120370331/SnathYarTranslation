@@ -113,11 +113,11 @@ const NotFoundPage: React.FC = () => {
         </p>
       </div>
       <a
-        href={basename}
+        href={getAppConfig().basePath || '/'}
         className="mystical-button px-8 py-3 rounded-md font-medium bg-mystical-accent hover:bg-mystical-accent-hover text-mystical-dark hover:shadow-mystical-glow transition-all duration-300 inline-block"
       >
         返回翻译门户 / Return to Portal
-      </Link>
+      </a>
     </div>
   )
 }
