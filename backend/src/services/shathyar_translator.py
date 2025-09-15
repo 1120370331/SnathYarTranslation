@@ -17,6 +17,7 @@ from ..models.official_dictionary import OfficialDictionary
 import re
 import string
 from ..utils.normalize import normalize_text
+from .translation_rag import TranslationRAG
 
 
 class TranslationSource(Enum):
@@ -65,6 +66,7 @@ class ShathyarTranslator:
         self.db_session = db_session
         self.ai_client = ai_client
         self.dictionary_reader = dictionary_reader
+        self.rag_service = TranslationRAG(db_session)
     
     async def translate(self, text: str, source_language: str) -> TranslationResult:
         """
@@ -315,6 +317,20 @@ class ShathyarTranslator:
                 ctx["relevant_entries"] = [e.to_dict() for e in relevant]
             except Exception:
                 ctx["relevant_entries"] = []
+
+            # RAG: 检索相似翻译历史作为AI参考信息
+            try:
+                similar_translations = self.rag_service.find_similar_translations(
+                    chinese_text, "chinese", limit=5
+                )
+                if similar_translations:
+                    rag_context = self.rag_service.format_rag_context(similar_translations)
+                    ctx["rag_context"] = rag_context
+            except Exception as e:
+                # RAG失败不影响主流程，记录日志但继续
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"RAG retrieval failed: {e}")
 
             ai_result = await self.ai_client.translate_chinese_to_shathyar(
                 chinese_text,

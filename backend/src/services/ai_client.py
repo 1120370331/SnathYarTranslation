@@ -286,7 +286,19 @@ origin_CN,Snathyar,origin_EN
 你的盟友喜欢看着你死去。,Bwaxa za' raga xil!,
 我会在黑暗中……等你……,Bwixki amala zal qulllll...,I will await you... in the dark...
 哦死亡之翼！您忠实的仆人辜负了您！,Ez Shuul'wah! Sk'woth'gl yu'gaz yoh'ghyl iilth!,O Deathwing! Your faithful servant has failed you!
-凝视恩佐斯的内心吧。,Gul'kafh an'qov N'zoth.,Gaze into the heart of N'Zoth
+凝视恩佐斯的内心吧。,Gul'kafh an'qov N'zoth.,Gaze into the heart of N'Zoth"""
+        
+        # 添加RAG相似翻译信息
+        rag_context = dictionary_context.get("rag_context", {}) if dictionary_context else {}
+        similar_translations = rag_context.get("similar_translations", [])
+        
+        if similar_translations:
+            base_prompt += "\n\n【相似翻译参考】（优先参考用户确认的翻译）\n"
+            for i, st in enumerate(similar_translations, 1):
+                user_mark = "✓用户确认" if st["is_user_confirmed"] else "AI生成"
+                base_prompt += f"{i}. {st['source_text']} → {st['translated_text']} ({user_mark}, 相似度:{st['similarity_score']})\n"
+        
+        base_prompt += f"""
 
 接下来你将收到一段用户文本，你要依据沙斯亚尔语，将用户输入的文本近似翻译成类似"沙斯亚尔语"的形式，然后返回。
 
@@ -295,7 +307,8 @@ origin_CN,Snathyar,origin_EN
 2) 生成自然语言风格的沙斯亚尔语，参考上面的词典示例进行语法结构变换（如语序重组、使用连词、强调与停顿等），避免机械逐字替换；
 3) 保留原文的标点与句式停顿：原文若含逗号/分号/省略号/问句等，译文中须以相应的停顿或分隔（逗号、破折号、或省略号）体现，不得将多子句合并为一句；
 4) 仅输出沙斯亚尔语译文文本，不要附加解释、前后缀标记或其它说明；
-5) 对于已存在于词典的词汇、句子，必须复用词典中已有的字词语。
+5) 对于已存在于词典的词汇、句子，必须复用词典中已有的字词语；
+6) 【重要】如果相似翻译参考中有高度相关的内容，优先借鉴其翻译风格和用词，特别是用户确认的翻译。
 
 用户文本：{chinese_text}
 
