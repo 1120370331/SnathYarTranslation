@@ -35,8 +35,8 @@ jobs:
 
       - name: Build Vite app
         env:
-          # Backend API endpoint (Devbox backend, public)
-          VITE_API_BASE_URL: https://lkpbpxyjfjja.sealoshzh.site/api/v1
+          # Backend API endpoint (Render backend, public)
+          VITE_API_BASE_URL: https://snathyartranslation.onrender.com/api/v1
           # Project Pages base path. Adjust if using custom domain.
           VITE_BASE_PATH: /SnathYarTranslation/
         run: |
@@ -58,4 +58,3 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
-
