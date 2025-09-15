@@ -218,7 +218,7 @@ class AIClient:
             "Accept": "application/json",
         }
         
-        model = os.getenv('SHATHYAR_AI_MODEL') or 'doubao-seed-1-6-flash-250828'
+        model = os.getenv('SHATHYAR_AI_MODEL') or 'doubao-seed-1-6-thinking-250715'
         payload = {
                 "model": model,
                 "messages": [

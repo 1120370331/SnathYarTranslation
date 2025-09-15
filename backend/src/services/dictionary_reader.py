@@ -52,6 +52,97 @@ class DictionaryReader:
         self.db_session = db_session
         self.csv_file_path = csv_file_path or "data/shasiyaer.csv"
         self._context_cache = None
+
+    def load_curated_from_csv(self, csv_path: str, source_tag: str = 'curated_proper_v1') -> Dict[str, Any]:
+        """
+        Load curated proper nouns into OfficialDictionary without removing existing data.
+
+        Cleaning rules:
+        - Trim whitespace; collapse inner spaces
+        - Normalize common quote/dash variants to ASCII where applicable
+        - Drop rows with missing Chinese or Shathyar fields
+        - Remove bracketed notes from Chinese (e.g., （复数）)
+        - Skip duplicates by normalized (origin_cn, shathyar)
+        """
+        file_path = Path(csv_path)
+        if not file_path.exists():
+            return {"status": "skipped", "reason": f"file not found: {csv_path}"}
+
+        def _clean(s: str) -> str:
+            if s is None:
+                return ''
+            repl = {
+                '’': "'", '‘': "'", '“': '"', '”': '"',
+                '—': '-', '–': '-', '‑': '-', '‧': "'",
+                'ˈ': "'", 'ʹ': "'", 'ʼ': "'", '‐': '-', '‒': '-', '―': '-', '−': '-',
+            }
+            for k, v in repl.items():
+                s = s.replace(k, v)
+            s = s.strip()
+            while '  ' in s:
+                s = s.replace('  ', ' ')
+            return s
+
+        def _strip_notes_cn(cn: str) -> str:
+            import re
+            return re.sub(r'（[^）]*）', '', cn).strip()
+
+        loaded = 0
+        skipped = 0
+        errors: List[str] = []
+
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    try:
+                        en = _clean(row.get('origin_en') or '')
+                        cn = _clean(row.get('origin_cn') or '')
+                        sh = _clean(row.get('shathyar') or '')
+
+                        if not cn or not sh:
+                            skipped += 1
+                            continue
+
+                        base_cn = _strip_notes_cn(cn) or cn
+                        cn = base_cn
+
+                        ncn = normalize_text(cn)
+                        nsh = normalize_text(sh)
+                        if not ncn or not nsh:
+                            skipped += 1
+                            continue
+
+                        # Skip if exact (cn,sh) already present
+                        exists_pair = self.db_session.query(OfficialDictionary).filter(
+                            (OfficialDictionary.norm_origin_cn == ncn) & (OfficialDictionary.norm_shathyar == nsh)
+                        ).first()
+                        if exists_pair:
+                            skipped += 1
+                            continue
+
+                        # Also avoid ambiguous duplicates by same CN mapping to multiple SH forms
+                        exists_cn = self.db_session.query(OfficialDictionary).filter(
+                            OfficialDictionary.norm_origin_cn == ncn
+                        ).first()
+                        if exists_cn:
+                            skipped += 1
+                            continue
+
+                        entry = OfficialDictionary(origin_cn=cn, shathyar=sh, origin_en=en, checksum=source_tag)
+                        self.db_session.add(entry)
+                        loaded += 1
+                    except Exception as e:
+                        skipped += 1
+                        errors.append(str(e))
+                self.db_session.commit()
+        except Exception as e:
+            self.db_session.rollback()
+            return {"status": "error", "error": str(e), "loaded": loaded, "skipped": skipped, "errors": errors}
+
+        # Invalidate context cache to reflect new data
+        self._context_cache = None
+        return {"status": "completed", "loaded": loaded, "skipped": skipped, "file_path": str(file_path), "tag": source_tag}
     
     def load_dictionary_from_csv(self, csv_path: str = None, force_reload: bool = False) -> Dict[str, Any]:
         """

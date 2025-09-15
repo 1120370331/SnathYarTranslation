@@ -83,6 +83,18 @@ async def lifespan(app: FastAPI):
             logger.info(f"📥 Dictionary imported: {stats}")
           else:
             logger.warning("⚠️ Could not locate shasiyaer.csv; dictionary remains empty")
+
+        # Always attempt to load curated proper nouns for AI context
+        try:
+          curated_path = Path(__file__).resolve().parent.parent / 'data' / 'official_proper_nouns.csv'
+          if curated_path.exists():
+            reader = DictionaryReader(db_session)
+            cstats = reader.load_curated_from_csv(str(curated_path), source_tag='curated_proper_v1')
+            logger.info(f"📚 Curated proper nouns loaded: {cstats}")
+          else:
+            logger.info("ℹ️ Curated proper nouns file not found; skipping")
+        except Exception as ce:
+          logger.warning(f"⚠️ Curated proper nouns load failed: {ce}")
       finally:
         try:
           next(db_gen)
