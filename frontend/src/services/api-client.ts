@@ -5,6 +5,7 @@
  */
 
 import axios from 'axios'
+import { getAppConfig } from '../config'
 
 export interface TranslationRequest {
   text: string
@@ -31,9 +32,13 @@ export interface QuotaStatus {
   is_blocked?: boolean
 }
 
-const http = axios.create({
-  baseURL: '/api/v1',
-  timeout: 15000,
+// Axios instance with dynamic baseURL from runtime config
+const http = axios.create({ timeout: 15000 })
+
+http.interceptors.request.use((config) => {
+  const base = getAppConfig().apiBaseUrl || '/api/v1'
+  config.baseURL = String(base).replace(/\/$/, '')
+  return config
 })
 
 // Fallback quota store (per-browser, per-day) used only if backend is unreachable

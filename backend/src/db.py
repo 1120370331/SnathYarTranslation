@@ -9,6 +9,7 @@ via the SHATHYAR_DB_URL environment variable.
 import os
 from contextlib import contextmanager
 from typing import Generator
+from urllib.parse import parse_qsl, urlparse, urlencode, urlunparse
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
@@ -69,9 +70,78 @@ def _backfill_normalized_columns(conn) -> None:
         pass
 
 
+def _normalize_db_url(url: str) -> str:
+    """Normalize and sanitize DB URL for SQLAlchemy/DBAPI compatibility.
+
+    - Convert "postgres://" to "postgresql://".
+    - For PostgreSQL URLs, drop unsupported query params (e.g., directConnection).
+    - Map common provider flags (e.g., ssl=true -> sslmode=require).
+    """
+    try:
+        if url.startswith("postgres://"):
+            url = "postgresql://" + url[len("postgres://") :]
+
+        if url.startswith("postgresql://") or url.startswith("postgresql+"):
+            parsed = urlparse(url)
+            # Parse query string and normalize known flags
+            q = dict(parse_qsl(parsed.query, keep_blank_values=True))
+
+            # Some providers set non-psycopg2 flags; remap or drop
+            if "ssl" in q and "sslmode" not in q:
+                v = (q.pop("ssl") or "").lower()
+                if v in {"1", "true", "yes", "on", "require"}:
+                    q["sslmode"] = "require"
+                elif v in {"0", "false", "no", "off"}:
+                    q["sslmode"] = "disable"
+
+            # Allowlist of psycopg2 connection options
+            allowed = {
+                "sslmode",
+                "application_name",
+                "connect_timeout",
+                "options",
+                "client_encoding",
+                "keepalives",
+                "keepalives_idle",
+                "keepalives_interval",
+                "keepalives_count",
+                "target_session_attrs",
+                "service",
+                # TLS file-based options (occasionally provided)
+                "sslrootcert",
+                "sslcert",
+                "sslkey",
+                "sslpassword",
+                "sslcrl",
+                # Newer libpq options
+                "gssencmode",
+                "ssl_min_protocol_version",
+                "ssl_max_protocol_version",
+            }
+
+            filtered = {k: v for k, v in q.items() if k in allowed}
+
+            # Rebuild URL with filtered query
+            url = urlunparse(
+                (
+                    parsed.scheme,
+                    parsed.netloc,
+                    parsed.path,
+                    parsed.params,
+                    urlencode(filtered, doseq=True),
+                    parsed.fragment,
+                )
+            )
+    except Exception:
+        # If anything goes wrong, fall back to original URL
+        return url
+
+    return url
+
+
 def _default_db_url() -> str:
     # Prefer explicit env var
-    env = os.getenv('SHATHYAR_DB_URL')
+    env = os.getenv('SHATHYAR_DB_URL') or os.getenv('DATABASE_URL')
     if env:
         return env
     # Use repo root absolute path to keep DB consistent regardless of CWD
@@ -81,7 +151,7 @@ def _default_db_url() -> str:
     return f"sqlite:///{db_path}"
 
 
-DB_URL = _default_db_url()
+DB_URL = _normalize_db_url(_default_db_url())
 
 # For SQLite, disable same-thread check to allow use in async context wrappers
 connect_args = {"check_same_thread": False} if DB_URL.startswith("sqlite") else {}

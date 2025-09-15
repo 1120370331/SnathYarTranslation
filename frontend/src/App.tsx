@@ -6,15 +6,18 @@
 
 import React from 'react'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { getAppConfig } from './config'
 import { Toaster } from 'react-hot-toast'
 import TranslationPage from './pages/TranslationPage'
 import ErrorBoundary from './components/ErrorBoundary'
 
 function App() {
+  const basename = (getAppConfig().basePath || (import.meta as any)?.env?.VITE_BASE_PATH || '/') as string
+
   return (
     <ErrorBoundary>
       <div className="App mystical-container min-h-screen">
-        <Router>
+        <Router basename={basename}>
           {/* Header */}
           <header className="bg-mystical-darker border-b border-mystical-border shadow-mystical">
             <div className="container mx-auto px-4 py-6">
@@ -110,7 +113,7 @@ const NotFoundPage: React.FC = () => {
         </p>
       </div>
       <a
-        href="/"
+        href={basename}
         className="mystical-button px-8 py-3 rounded-md font-medium bg-mystical-accent hover:bg-mystical-accent-hover text-mystical-dark hover:shadow-mystical-glow transition-all duration-300 inline-block"
       >
         返回翻译门户 / Return to Portal
