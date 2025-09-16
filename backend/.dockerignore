@@ -1,0 +1,25 @@
+# Python caches and virtualenvs
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+venv/
+.venv/
+
+# Git and IDE
+.git/
+.gitignore
+.vscode/
+.idea/
+
+# Tests and local scripts not needed in runtime image
+tests/
+scripts/
+tmp_*.py
+tmp_*.txt
+
+# OS and misc
+*.log
+*.sqlite3
+*.db-journal
+

@@ -1,0 +1,116 @@
+name: Deploy Frontend to GitHub Pages
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: 'pages'
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Load optional base path from frontend/.env.production
+        shell: bash
+        run: |
+          if [[ -f frontend/.env.production ]]; then
+            BP=$(grep -E '^\s*VITE_BASE_PATH=' frontend/.env.production | tail -n1 | cut -d'=' -f2- | tr -d '"' | tr -d "'")
+            if [[ -n "$BP" ]]; then
+              echo "VITE_BASE_PATH=$BP" >> $GITHUB_ENV
+            fi
+          fi
+          # Fallback: compute from repo name if not set above
+          if [[ -z "$VITE_BASE_PATH" ]]; then
+            REPO="${{ github.event.repository.name }}"
+            if [[ "$REPO" == *.github.io ]]; then
+              echo "VITE_BASE_PATH=/" >> $GITHUB_ENV
+            else
+              echo "VITE_BASE_PATH=/$REPO/" >> $GITHUB_ENV
+            fi
+          fi
+          echo "Resolved VITE_BASE_PATH=${VITE_BASE_PATH}"
+
+      - name: Resolve API base URL from repo variables/secrets or .env.production
+        shell: bash
+        run: |
+          if [[ -n "${{ vars.API_BASE_URL }}" ]]; then
+            echo "API_BASE_URL=${{ vars.API_BASE_URL }}" >> $GITHUB_ENV
+          elif [[ -n "${{ secrets.API_BASE_URL }}" ]]; then
+            echo "API_BASE_URL=${{ secrets.API_BASE_URL }}" >> $GITHUB_ENV
+          elif [[ -f frontend/.env.production ]]; then
+            VAL=$(grep -E '^\s*VITE_API_BASE_URL=' frontend/.env.production | tail -n1 | cut -d'=' -f2- | tr -d '"' | tr -d "'")
+            if [[ -n "$VAL" ]]; then
+              echo "API_BASE_URL=$VAL" >> $GITHUB_ENV
+            fi
+          else
+            echo "ERROR: Please set Repository Variable or Secret 'API_BASE_URL' (e.g., https://your-backend.example.com/api/v1)" >&2
+            exit 1
+          fi
+          # Also expose for Vite fallback
+          echo "VITE_API_BASE_URL=$API_BASE_URL" >> $GITHUB_ENV
+
+      - name: Write runtime app-config.json
+        working-directory: frontend
+        shell: bash
+        run: |
+          mkdir -p public
+          cat > public/app-config.json << JSON
+          {
+            "apiBaseUrl": "${API_BASE_URL}",
+            "basePath": "${VITE_BASE_PATH}"
+          }
+          JSON
+          echo "Wrote public/app-config.json:"
+          cat public/app-config.json
+
+      - name: Build
+        env:
+          # Ensure Vite picks up base path and keeps a fallback API base URL compiled in
+          VITE_BASE_PATH: ${{ env.VITE_BASE_PATH }}
+          VITE_API_BASE_URL: ${{ env.VITE_API_BASE_URL }}
+        working-directory: frontend
+        run: npm run build
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
