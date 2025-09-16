@@ -8,10 +8,27 @@ for /f "tokens=5" %%a in ('netstat -aon ^| findstr :5173 ^| findstr LISTENING') 
 
 REM Backend
 pushd backend
-if not exist "venv" python -m venv venv
+if not exist "venv" (
+    echo Creating virtual environment...
+    python -m venv venv
+)
+
+echo Activating virtual environment...
 call venv\Scripts\activate.bat
+
+REM Test if pip is working, if not recreate venv
+pip --version >nul 2>&1
+if errorlevel 1 (
+    echo Virtual environment is corrupted, rebuilding...
+    cd ..
+    rmdir /s /q backend\venv
+    cd backend
+    python -m venv venv
+    call venv\Scripts\activate.bat
+)
+
 echo Installing backend dependencies...
-pip install --upgrade pip
+python -m pip install --upgrade pip
 pip install -r requirements.txt
 pip install -e .
 start "Backend" cmd /k "venv\Scripts\activate.bat && python -m uvicorn src.main:app --host 127.0.0.1 --port 8000 --reload || pause"
