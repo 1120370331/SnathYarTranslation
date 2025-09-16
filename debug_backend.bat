@@ -31,7 +31,7 @@ if exist "venv\Scripts\activate.bat" (
 )
 
 echo.
-echo 🔧 激活虚拟环境并检查依赖...
+echo 🔧 激活虚拟环境并安装/检查依赖...
 call venv\Scripts\activate.bat
 
 echo.
@@ -39,7 +39,20 @@ echo Python 版本:
 python --version
 
 echo.
-echo 检查关键依赖:
+echo 🔧 安装/更新依赖包...
+echo 升级 pip...
+pip install --upgrade pip
+
+echo.
+echo 安装 requirements.txt 中的依赖...
+pip install -r requirements.txt
+
+echo.
+echo 安装项目本身...
+pip install -e .
+
+echo.
+echo 🔍 检查关键依赖安装状态:
 python -c "import fastapi; print('✅ FastAPI:', fastapi.__version__)" 2>nul || echo "❌ FastAPI 未安装"
 python -c "import uvicorn; print('✅ Uvicorn:', uvicorn.__version__)" 2>nul || echo "❌ Uvicorn 未安装"
 python -c "import sqlalchemy; print('✅ SQLAlchemy:', sqlalchemy.__version__)" 2>nul || echo "❌ SQLAlchemy 未安装"
