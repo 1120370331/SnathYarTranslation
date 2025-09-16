@@ -5,7 +5,7 @@ Tracks user sessions and rate limiting quotas for translation API.
 Implements token bucket algorithm for quota management.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import Column, String, Integer, DateTime, Boolean
 from sqlalchemy.sql import func
 from .translation_entry import Base
@@ -74,7 +74,7 @@ class UserSession(Base):
             return False
         
         # Auto-reset if time has passed
-        if datetime.utcnow() >= self.reset_time:
+        if datetime.now(timezone.utc) >= self.reset_time:
             self._reset_daily_quota()
         
         return self.tokens_remaining > 0
@@ -92,11 +92,11 @@ class UserSession(Base):
         
         self.tokens_remaining -= 1
         self.total_requests += 1
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         
         # Set first request timestamp if this is the first request today
         if self.tokens_remaining == self.daily_limit - 1:
-            self.first_request_at = datetime.utcnow()
+            self.first_request_at = datetime.now(timezone.utc)
         
         return True
     
@@ -104,10 +104,10 @@ class UserSession(Base):
         """Get current quota status for API responses"""
         
         # Auto-reset if needed
-        if datetime.utcnow() >= self.reset_time:
+        if datetime.now(timezone.utc) >= self.reset_time:
             self._reset_daily_quota()
         
-        time_to_reset = max(0, int((self.reset_time - datetime.utcnow()).total_seconds()))
+        time_to_reset = max(0, int((self.reset_time - datetime.now(timezone.utc)).total_seconds()))
         
         return {
             "tokens_remaining": self.tokens_remaining,
@@ -124,23 +124,23 @@ class UserSession(Base):
         self.tokens_remaining = self.daily_limit
         self.reset_time = self._calculate_next_reset()
         self.first_request_at = None
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
     
     def _calculate_next_reset(self) -> datetime:
         """Calculate next daily reset time (midnight UTC)"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         next_reset = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
         return next_reset
     
     def block_session(self, reason: str = "Manual block") -> None:
         """Manually block session (admin override)"""
         self.is_blocked = True
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
     
     def unblock_session(self) -> None:
         """Remove manual block from session"""
         self.is_blocked = False
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
     
     def extend_quota(self, additional_tokens: int) -> None:
         """Add extra tokens to current quota (admin action)"""
@@ -151,7 +151,7 @@ class UserSession(Base):
             self.tokens_remaining + additional_tokens, 
             self.daily_limit * 2  # Cap at 2x daily limit
         )
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
     
     def to_dict(self) -> dict:
         """Convert to dictionary for API responses"""
