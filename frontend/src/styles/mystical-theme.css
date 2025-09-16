@@ -1,0 +1,470 @@
+/**
+ * Mystical Theme CSS
+ * 
+ * Enhanced dark mystical theme with Cthulhu/cosmic horror aesthetics for the Shathyar translation app.
+ * Implements WCAG AA accessibility compliance with high contrast ratios.
+ */
+
+/* Base Colors */
+:root {
+  /* Brown-black scroll palette per PRD */
+  --mystical-dark: #1b1511;
+  --mystical-darker: #14100d;
+  --mystical-darkest: #0f0b08;
+  
+  /* Primary text colors (parchment-like) */
+  --mystical-text: #EDE3D1;
+  --mystical-text-secondary: #D9CBB3;
+  --mystical-muted: #AC9B84;
+  
+  /* Accent colors (gold/copper) */
+  --mystical-accent: #D4AF37;
+  --mystical-accent-hover: #E0C170;
+  --mystical-accent-light: #F2D49E;
+  --mystical-accent-dark: #8C6D1F;
+  
+  /* Border and divider colors */
+  --mystical-border: #5C4634;
+  --mystical-border-light: #6E5642;
+  --mystical-border-glow: rgba(212, 175, 55, 0.35);
+  
+  /* State colors */
+  --mystical-success: #10b981;
+  --mystical-warning: #E3A24B;
+  --mystical-error: #c75151;
+  --mystical-info: #58A3C6;
+  
+  /* Decorative */
+  --mystical-gold: #D4AF37;
+  --mystical-copper: #B87333;
+  --mystical-void: #22160F;
+  
+  /* Glows */
+  --mystical-glow: 0 0 20px rgba(212, 175, 55, 0.35);
+  --mystical-glow-intense: 0 0 30px rgba(212, 175, 55, 0.5);
+  --mystical-glow-gold: 0 0 18px rgba(212, 175, 55, 0.45);
+  
+  /* Shadows */
+  --mystical-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --mystical-shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.5);
+  --mystical-shadow-inset: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Base typography */
+.font-mystical {
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-feature-settings: 'kern', 'liga';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Container styles with enhanced backgrounds */
+.mystical-container {
+  /* Make container background transparent so ::before image shows */
+  background: transparent;
+  color: var(--mystical-text);
+  position: relative;
+}
+
+.mystical-container::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  /* Keep subtle mystical overlays only; main image is now on body */
+  background-image:
+    radial-gradient(circle at 20% 20%, rgba(124, 58, 237, 0.10) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(212, 175, 55, 0.06) 0%, transparent 50%),
+    radial-gradient(circle at 40% 90%, rgba(59, 130, 246, 0.06) 0%, transparent 50%);
+  background-size: auto, auto, auto;
+  background-position: 20% 20%, 80% 80%, 40% 90%;
+  background-repeat: no-repeat, no-repeat, no-repeat;
+  background-attachment: scroll, scroll, scroll;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Enhanced form components */
+.mystical-form {
+  background: linear-gradient(135deg, rgba(36, 27, 20, 0.85) 0%, rgba(31, 24, 18, 0.88) 100%);
+  border: 2px solid var(--mystical-border);
+  box-shadow: var(--mystical-shadow-lg);
+  backdrop-filter: blur(10px);
+  position: relative;
+}
+
+.mystical-form::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: linear-gradient(45deg, var(--mystical-copper), var(--mystical-gold), var(--mystical-copper));
+  border-radius: inherit;
+  z-index: -1;
+  opacity: 0.3;
+  animation: mystical-border-glow 3s ease-in-out infinite alternate;
+}
+
+@keyframes mystical-border-glow {
+  0% { opacity: 0.2; }
+  100% { opacity: 0.4; }
+}
+
+.mystical-input,
+.mystical-textarea,
+.mystical-select {
+  background: linear-gradient(135deg, rgba(36, 27, 20, 0.75) 0%, rgba(26, 20, 15, 0.8) 100%);
+  border: 2px solid var(--mystical-border);
+  color: var(--mystical-text);
+  transition: all 0.3s ease-in-out;
+  box-shadow: var(--mystical-shadow-inset);
+}
+
+.mystical-input:focus,
+.mystical-textarea:focus,
+.mystical-select:focus {
+  outline: none;
+  border-color: var(--mystical-accent);
+  box-shadow: 0 0 0 4px rgba(212, 175, 55, 0.2), var(--mystical-glow);
+  background: rgba(30, 23, 18, 0.92);
+}
+
+.mystical-input::placeholder,
+.mystical-textarea::placeholder {
+  color: var(--mystical-muted);
+  font-style: italic;
+}
+
+/* Enhanced button styles */
+.mystical-button {
+  background: linear-gradient(135deg, var(--mystical-accent) 0%, var(--mystical-accent-dark) 100%);
+  color: white;
+  border: none;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  font-weight: 600;
+  position: relative;
+  overflow: hidden;
+}
+
+.mystical-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+.mystical-button:hover:not(:disabled)::before {
+  left: 100%;
+}
+
+.mystical-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, var(--mystical-accent-hover) 0%, var(--mystical-accent) 100%);
+  box-shadow: var(--mystical-glow-intense);
+  transform: translateY(-2px);
+}
+
+.mystical-button:active {
+  transform: translateY(0);
+}
+
+.mystical-button:disabled {
+  background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+  color: #9ca3af;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.mystical-button-outline {
+  background: transparent;
+  color: var(--mystical-accent);
+  border: 2px solid var(--mystical-accent);
+  transition: all 0.3s ease;
+  cursor: pointer;
+  font-weight: 600;
+  position: relative;
+}
+
+.mystical-button-outline:hover:not(:disabled) {
+  background: var(--mystical-accent);
+  color: white;
+  box-shadow: var(--mystical-glow);
+  transform: translateY(-1px);
+}
+
+.mystical-button-secondary {
+  background: rgba(26, 26, 46, 0.8);
+  color: var(--mystical-muted);
+  border: 1px solid var(--mystical-border);
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.mystical-button-secondary:hover:not(:disabled) {
+  color: var(--mystical-text);
+  border-color: var(--mystical-border-light);
+  background: rgba(26, 26, 46, 1);
+}
+
+/* Enhanced component-specific styles */
+
+/* Magic Power Indicator with more mystical design */
+.mystical-magic-power-indicator {
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.9) 0%, rgba(22, 33, 62, 0.9) 100%);
+  border: 2px solid var(--mystical-border);
+  box-shadow: var(--mystical-shadow);
+  backdrop-filter: blur(5px);
+  position: relative;
+}
+
+.mystical-magic-power-indicator.high {
+  border-color: var(--mystical-success);
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+}
+
+.mystical-magic-power-indicator.medium {
+  border-color: var(--mystical-info);
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+}
+
+.mystical-magic-power-indicator.low {
+  border-color: var(--mystical-warning);
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.3);
+}
+
+/* Translation Result with enhanced styling */
+.mystical-translation-result {
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.88) 0%, rgba(22, 33, 62, 0.88) 100%);
+  border: 2px solid var(--mystical-border);
+  box-shadow: var(--mystical-shadow-lg);
+  backdrop-filter: blur(10px);
+  position: relative;
+}
+
+.mystical-translation-result::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--mystical-accent), var(--mystical-gold), var(--mystical-accent));
+  opacity: 0.6;
+}
+
+/* Error Display with mystical styling */
+.mystical-error-display {
+  box-shadow: var(--mystical-shadow-lg);
+  backdrop-filter: blur(5px);
+}
+
+/* Loading states with mystical effects */
+.mystical-loading {
+  position: relative;
+  overflow: hidden;
+}
+
+.mystical-loading::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(124, 58, 237, 0.3),
+    transparent
+  );
+  animation: mystical-shimmer 2s infinite;
+}
+
+@keyframes mystical-shimmer {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+/* Enhanced pulse animation */
+.mystical-pulse {
+  animation: mystical-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes mystical-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: .8;
+    transform: scale(1.05);
+  }
+}
+
+/* Enhanced floating animation */
+.mystical-float {
+  animation: mystical-float 6s ease-in-out infinite;
+}
+
+@keyframes mystical-float {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  33% {
+    transform: translateY(-10px) rotate(1deg);
+  }
+  66% {
+    transform: translateY(-5px) rotate(-1deg);
+  }
+}
+
+/* Mystical text effects */
+.mystical-text-glow {
+  text-shadow: 0 0 10px var(--mystical-gold);
+}
+
+.mystical-text-gold {
+  background: linear-gradient(45deg, var(--mystical-gold), var(--mystical-copper));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Enhanced glow effects */
+.mystical-glow {
+  box-shadow: var(--mystical-glow);
+}
+
+.mystical-glow-intense {
+  box-shadow: var(--mystical-glow-intense);
+}
+
+.mystical-glow-gold {
+  box-shadow: var(--mystical-glow-gold);
+}
+
+/* Card styles for content sections */
+.mystical-card {
+  background: radial-gradient(800px 400px at 50% 0%, rgba(236, 221, 196, 0.06), transparent),
+              linear-gradient(135deg, rgba(36, 27, 20, 0.8) 0%, rgba(31, 24, 18, 0.85) 100%);
+  border: 1px solid var(--mystical-border);
+  box-shadow: var(--mystical-shadow);
+  backdrop-filter: blur(5px);
+  transition: all 0.3s ease;
+}
+
+.mystical-card:hover {
+  border-color: var(--mystical-border-light);
+  box-shadow: var(--mystical-shadow-lg);
+  transform: translateY(-2px);
+}
+
+/* Icon styles */
+.mystical-icon {
+  filter: drop-shadow(0 0 5px rgba(212, 175, 55, 0.5));
+  transition: all 0.3s ease;
+}
+
+.mystical-icon:hover {
+  filter: drop-shadow(0 0 10px rgba(212, 175, 55, 0.75));
+  transform: scale(1.1);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--mystical-dark);
+  border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, var(--mystical-accent), var(--mystical-accent-dark));
+  border-radius: 6px;
+  border: 2px solid var(--mystical-dark);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, var(--mystical-accent-hover), var(--mystical-accent));
+}
+
+/* Selection styles */
+::selection {
+  background: rgba(212, 175, 55, 0.25);
+  color: var(--mystical-text);
+}
+
+/* Responsive utilities */
+@media (max-width: 768px) {
+  .mystical-container {
+    padding: 1rem;
+  }
+  
+  .mystical-form {
+    padding: 1rem;
+  }
+  
+  .mystical-glow {
+    box-shadow: var(--mystical-shadow);
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  :root {
+    --mystical-text: #ffffff;
+    --mystical-border: #ffffff;
+    --mystical-accent: #8b5cf6;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  
+  .mystical-button:hover:not(:disabled) {
+    transform: none;
+  }
+  
+  .mystical-card:hover {
+    transform: none;
+  }
+}
+
+/* Print styles */
+@media print {
+  .mystical-container {
+    background: white !important;
+    color: black !important;
+  }
+  
+  .mystical-form,
+  .mystical-card {
+    border: 1px solid #ccc !important;
+    background: white !important;
+    box-shadow: none !important;
+  }
+  
+  .mystical-button {
+    background: #6b7280 !important;
+    color: white !important;
+  }
+}

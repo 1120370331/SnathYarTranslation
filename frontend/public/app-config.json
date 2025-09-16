@@ -1,0 +1,6 @@
+{
+  "#": "Runtime config for GitHub Pages. Edit values and redeploy without rebuilding.",
+  "apiBaseUrl": "/api/v1",
+  "basePath": "/"
+}
+

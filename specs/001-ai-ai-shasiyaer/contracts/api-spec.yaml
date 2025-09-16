@@ -1,0 +1,493 @@
+openapi: 3.0.3
+info:
+  title: Shathyar Translation API
+  description: API for bidirectional Chinese-Shathyar translation with AI-powered generation
+  version: 1.0.1
+  contact:
+    name: Shathyar Translation Service
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Development server
+  - url: https://api.shathyar-translator.com/api/v1
+    description: Production server
+
+paths:
+  /translate:
+    post:
+      summary: Translate text between Chinese and Shathyar
+      description: |
+        Performs bidirectional translation between Chinese and Shathyar languages.
+        Implements caching, rate limiting, and AI generation as needed.
+        
+        Functional Requirements Addressed:
+        - FR-001: Bidirectional translator
+        - FR-002: Language selection
+        - FR-003: Database check before AI
+        - FR-005: AI-based translation generation
+        - FR-006: User editing capability
+        - FR-010: Rate limiting enforcement
+        - FR-012: Input length validation
+      tags:
+        - Translation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TranslationRequest'
+            examples:
+              chinese_to_shathyar:
+                summary: Chinese to Shathyar translation
+                value:
+                  text: "你好，世界"
+                  source_language: "chinese"
+              shathyar_to_chinese:
+                summary: Shathyar to Chinese translation  
+                value:
+                  text: "Gul'thrak mor'dun"
+                  source_language: "shathyar"
+      responses:
+        '200':
+          description: Translation successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TranslationResponse'
+              examples:
+                successful_translation:
+                  summary: Successful AI translation
+                  value:
+                    translated_text: "Gul'thrak mor'dun"
+                    source_text: "你好，世界"
+                    is_cached: false
+                    is_ai_generated: true
+                    can_edit: true
+                    magic_power_remaining: 487
+                    confidence_score: 0.92
+                cached_translation:
+                  summary: Cached translation result
+                  value:
+                    translated_text: "你好，世界"  
+                    source_text: "Gul'thrak mor'dun"
+                    is_cached: true
+                    is_ai_generated: false
+                    can_edit: false
+                    magic_power_remaining: 500
+                    confidence_score: 1.0
+        '400':
+          description: Bad request - invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                text_too_long:
+                  summary: Input text exceeds 500 characters
+                  value:
+                    error: "input_validation_failed"
+                    message: "古卷无法记录如此冗长的文字..."
+                    details: "Text length exceeds 500 characters"
+                    magic_power_remaining: 423
+                invalid_language:
+                  summary: Invalid source language
+                  value:
+                    error: "invalid_language"
+                    message: "未知的古老语言..."
+                    details: "source_language must be 'chinese' or 'shathyar'"
+                    magic_power_remaining: 423
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                rate_limited:
+                  summary: Daily translation limit reached
+                  value:
+                    error: "rate_limit_exceeded"
+                    message: "魔力耗尽！今日翻译次数已达上限。"
+                    details: "Daily limit of 500 translations exceeded"
+                    magic_power_remaining: 0
+                    reset_time: "2025-09-12T00:00:00Z"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                ai_service_error:
+                  summary: AI translation service unavailable
+                  value:
+                    error: "translation_service_unavailable"
+                    message: "翻译法阵暂时失效，请稍后重试。"
+                    details: "External AI service temporarily unavailable"
+                    magic_power_remaining: 487
+        '503':
+          description: Service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                circuit_breaker_open:
+                  summary: Circuit breaker protecting against failures
+                  value:
+                    error: "service_temporarily_unavailable"
+                    message: "古神的低语暂时无法解读..."
+                    details: "Translation service temporarily unavailable"
+                    magic_power_remaining: 487
+
+  /translate/{translation_id}/confirm:
+    post:
+      summary: Confirm and save user-edited translation
+      description: |
+        Allows users to edit AI-generated translations and save the final version.
+        
+        Functional Requirements Addressed:
+        - FR-006: User editing of AI translations
+        - FR-007: Save confirmed translations to database
+        - FR-008: Provide copy functionality
+      tags:
+        - Translation
+      parameters:
+        - name: translation_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Translation request ID from previous translate call
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmTranslationRequest'
+      responses:
+        '200':
+          description: Translation confirmed and saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfirmTranslationResponse'
+        '404':
+          description: Translation not found or already confirmed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '400':
+          description: Invalid edited translation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /dictionary/search:
+    get:
+      summary: Search official Shathyar dictionary
+      description: |
+        Search the official shasiyaer.csv dictionary for exact matches.
+        
+        Functional Requirements Addressed:
+        - FR-004: Use official dictionary as primary reference
+        - FR-009: Display failure message for missing entries
+      tags:
+        - Dictionary
+      parameters:
+        - name: text
+          in: query
+          required: true
+          schema:
+            type: string
+            maxLength: 500
+          description: Text to search for in dictionary
+        - name: language
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [chinese, shathyar]
+          description: Language of the search text
+      responses:
+        '200':
+          description: Dictionary entries found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DictionaryResponse'
+              examples:
+                found_entries:
+                  summary: Entries found in dictionary
+                  value:
+                    results:
+                      - origin_cn: "力量"
+                        shathyar: "Keth"
+                        origin_en: "Power"
+                      - origin_cn: "黑暗力量" 
+                        shathyar: "Keth'mora"
+                        origin_en: "Dark Power"
+                    total_count: 2
+        '404':
+          description: No dictionary entries found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                not_found:
+                  summary: Text not found in dictionary
+                  value:
+                    error: "dictionary_entry_not_found"
+                    message: "破译失败..."
+                    details: "No matching entries found in official dictionary"
+
+  /session/quota:
+    get:
+      summary: Get current user's translation quota
+      description: |
+        Returns the current user's remaining daily translation quota.
+        
+        Functional Requirements Addressed:
+        - FR-011: Display remaining quota as "magic power"
+      tags:
+        - Session
+      responses:
+        '200':
+          description: Current quota information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuotaResponse'
+              examples:
+                active_quota:
+                  summary: User has remaining translations
+                  value:
+                    magic_power_remaining: 423
+                    daily_limit: 500
+                    reset_time: "2025-09-12T00:00:00Z"
+                    total_used_today: 77
+                exhausted_quota:
+                  summary: User has no remaining translations
+                  value:
+                    magic_power_remaining: 0
+                    daily_limit: 500
+                    reset_time: "2025-09-12T00:00:00Z"
+                    total_used_today: 500
+
+components:
+  schemas:
+    TranslationRequest:
+      type: object
+      required:
+        - text
+        - source_language
+      properties:
+        text:
+          type: string
+          maxLength: 500
+          minLength: 1
+          description: Text to translate
+          example: "你好，世界"
+        source_language:
+          type: string
+          enum: [chinese, shathyar]
+          description: Language of the input text
+          example: "chinese"
+
+    TranslationResponse:
+      type: object
+      required:
+        - translated_text
+        - source_text
+        - is_cached
+        - magic_power_remaining
+      properties:
+        translated_text:
+          type: string
+          description: Translated result
+          example: "Gul'thrak mor'dun"
+        source_text:
+          type: string
+          description: Original input text
+          example: "你好，世界"
+        is_cached:
+          type: boolean
+          description: Whether result came from cache
+          example: false
+        is_ai_generated:
+          type: boolean
+          description: Whether translation was generated by AI
+          example: true
+        can_edit:
+          type: boolean
+          description: Whether user can edit this translation
+          example: true
+        magic_power_remaining:
+          type: integer
+          minimum: 0
+          maximum: 500
+          description: Remaining daily translations
+          example: 487
+        confidence_score:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: AI confidence in translation quality
+          example: 0.92
+          nullable: true
+        translation_id:
+          type: string
+          format: uuid
+          description: ID for editing this translation
+          example: "550e8400-e29b-41d4-a716-446655440000"
+
+    ConfirmTranslationRequest:
+      type: object
+      required:
+        - edited_text
+      properties:
+        edited_text:
+          type: string
+          maxLength: 1000
+          minLength: 1
+          description: User's edited version of the translation
+          example: "Gul'thrak mor'dun vel"
+
+    ConfirmTranslationResponse:
+      type: object
+      required:
+        - success
+        - copy_text
+      properties:
+        success:
+          type: boolean
+          description: Whether confirmation was successful
+          example: true
+        copy_text:
+          type: string
+          description: Final text ready for copying
+          example: "Gul'thrak mor'dun vel"
+        message:
+          type: string
+          description: Success message
+          example: "翻译已保存至古老典籍中"
+
+    DictionaryResponse:
+      type: object
+      required:
+        - results
+        - total_count
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/DictionaryEntry'
+          description: Matching dictionary entries
+        total_count:
+          type: integer
+          description: Total number of matches found
+          example: 2
+
+    DictionaryEntry:
+      type: object
+      required:
+        - origin_cn
+        - shathyar
+      properties:
+        origin_cn:
+          type: string
+          description: Original Chinese text
+          example: "力量"
+        shathyar:
+          type: string  
+          description: Shathyar translation
+          example: "Keth"
+        origin_en:
+          type: string
+          description: Original English text
+          example: "Power"
+          nullable: true
+
+    QuotaResponse:
+      type: object
+      required:
+        - magic_power_remaining
+        - daily_limit
+        - reset_time
+        - total_used_today
+      properties:
+        magic_power_remaining:
+          type: integer
+          minimum: 0
+          maximum: 500
+          description: Remaining translations today
+          example: 423
+        daily_limit:
+          type: integer
+          description: Maximum daily translations allowed
+          example: 500
+        reset_time:
+          type: string
+          format: date-time
+          description: When quota resets (ISO 8601)
+          example: "2025-09-12T00:00:00Z"
+        total_used_today:
+          type: integer
+          minimum: 0
+          description: Translations used today
+          example: 77
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Machine-readable error code
+          example: "rate_limit_exceeded"
+        message:
+          type: string
+          description: Human-readable error message in mystical theme
+          example: "魔力耗尽！今日翻译次数已达上限。"
+        details:
+          type: string
+          description: Technical error details
+          example: "Daily limit of 500 translations exceeded"
+        magic_power_remaining:
+          type: integer
+          minimum: 0
+          maximum: 500
+          description: Current remaining quota
+          example: 0
+        reset_time:
+          type: string
+          format: date-time
+          description: When quota/service resets
+          example: "2025-09-12T00:00:00Z"
+          nullable: true
+
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Optional API key for enhanced rate limits
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: Translation
+    description: Core translation functionality
+  - name: Dictionary
+    description: Official dictionary search
+  - name: Session
+    description: User session and quota management
