@@ -1,6 +1,6 @@
 {
   "#": "Runtime config for GitHub Pages. Edit values and redeploy without rebuilding.",
-  "apiBaseUrl": "/api/v1",
+  "apiBaseUrl": "https://snathyartranslation.onrender.com/api/v1",
   "basePath": "/"
 }
 
