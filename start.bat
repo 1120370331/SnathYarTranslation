@@ -10,7 +10,7 @@ REM Backend
 pushd backend
 if not exist "venv" python -m venv venv
 call venv\Scripts\activate.bat
-echo 🔧 Installing backend dependencies...
+echo Installing backend dependencies...
 pip install --upgrade pip
 pip install -r requirements.txt
 pip install -e .
