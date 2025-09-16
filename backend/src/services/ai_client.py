@@ -261,65 +261,6 @@ class AIClient:
             f"{base}/v1/chat/completions",
             f"{base}/openai/v1/chat/completions",
         ]
-        
-        # === 🔍 真实请求数据包记录 ===
-        print("🔍 捕获到真实AI请求!")
-        print("=" * 120)
-        print(f"📡 目标URL: {candidates[0]}")
-        print("📤 请求头:")
-        for key, value in headers.items():
-            if 'authorization' in key.lower():
-                print(f"  {key}: {value[:20]}...{value[-10:] if len(value) > 30 else value}")
-            else:
-                print(f"  {key}: {value}")
-        print("\n📋 完整请求体 (Payload):")
-        print("-" * 120)
-        print(json.dumps(payload, indent=2, ensure_ascii=False))
-        print("-" * 120)
-        print("🎯 用户Prompt内容:")
-        print("-" * 120)
-        if payload.get('messages'):
-            for msg in payload['messages']:
-                if msg.get('role') == 'user':
-                    print(msg.get('content', ''))
-                    break
-        print("-" * 120)
-        
-        # 保存到文件
-        try:
-            import json
-            from datetime import datetime
-            from pathlib import Path
-            
-            log_data = {
-                'timestamp': datetime.utcnow().isoformat(),
-                'url_candidates': candidates,
-                'headers': headers,
-                'payload': payload,
-                'user_prompt': payload.get('messages', [{}])[-1].get('content', '') if payload.get('messages') else ''
-            }
-            
-            log_file = Path(__file__).parent.parent.parent / "real_ai_requests.json"
-            try:
-                if log_file.exists():
-                    with open(log_file, 'r', encoding='utf-8') as f:
-                        logs = json.load(f)
-                else:
-                    logs = []
-                
-                logs.append(log_data)
-                
-                with open(log_file, 'w', encoding='utf-8') as f:
-                    json.dump(logs, f, indent=2, ensure_ascii=False)
-                
-                print(f"💾 请求已记录到: {log_file}")
-            except Exception as e:
-                print(f"❌ 记录请求失败: {e}")
-        except Exception as e:
-            print(f"❌ 日志处理失败: {e}")
-        
-        print("=" * 120)
-        # === 请求记录结束 ===
         last_error_text = None
         for url in candidates:
             try:
