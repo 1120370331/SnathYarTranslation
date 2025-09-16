@@ -132,29 +132,11 @@ def create_services(db_session: Session):
                 break
         api_key = os.getenv('SHATHYAR_AI_API_KEY') or os.getenv('VOLCENGINE_API_KEY') or ''
         base_url = os.getenv('SHATHYAR_AI_BASE_URL') or base_url
-    # Optional mock AI client for local testing (no external network required)
-    use_mock = (os.getenv('SHATHYAR_AI_MOCK', '0').lower() in ('1', 'true', 'yes', 'on'))
-    if use_mock:
-        class _MockAIClient:
-            async def translate_chinese_to_shathyar(self, chinese_text: str, dictionary_context: Dict = None):
-                # Very lightweight, deterministic pseudo-Shathyar generator
-                import hashlib
-                h = hashlib.sha256(chinese_text.encode('utf-8')).hexdigest()
-                syllables = ['ak','an','al','sh','th','ul','za','ra','qu','gul','ka','iil','bw','ez','kor','vash','jir','mor','dun']
-                words = []
-                for i in range(3):
-                    idx1 = int(h[i*2:i*2+2], 16) % len(syllables)
-                    idx2 = int(h[i*2+6:i*2+8], 16) % len(syllables)
-                    w = (syllables[idx1] + syllables[idx2])
-                    if i == 2:
-                        w = w.capitalize() + "'ov"
-                    words.append(w.capitalize())
-                pseudo = ' '.join(words)
-                from types import SimpleNamespace
-                return SimpleNamespace(translated_text=pseudo, confidence_score=0.82)
-        ai_client = _MockAIClient()
-    else:
-        ai_client = AIClient(api_key=api_key, base_url=base_url)
+    # 创建真实AI客户端，如果没有API密钥则服务器启动时就会失败
+    if not api_key:
+        raise ValueError("AI service not configured: Missing VOLCENGINE_API_KEY or SHATHYAR_AI_API_KEY environment variable")
+
+    ai_client = AIClient(api_key=api_key, base_url=base_url)
     dictionary_reader = DictionaryReader(db_session)
     rate_limiter = RateLimiter(db_session)
     translator = ShathyarTranslator(db_session, ai_client, dictionary_reader)
@@ -241,16 +223,7 @@ async def translate_text(
                     processing_time_ms=processing_time
                 )
 
-        # 2) For chinese→shathyar, ensure AI auth is configured; then check rate limit and consume token
-        # Only enforce AI auth when the client exposes an api_key attribute
-        if hasattr(services['ai_client'], 'api_key') and not services['ai_client'].api_key:
-            quota = rate_limiter.get_session_quota(client_ip)
-            error_response = ErrorResponse(
-                error='AI 服务未配置或认证失败 / AI service not configured or authentication failed',
-                error_type='ai_auth',
-                magic_power_remaining=quota.get('tokens_remaining', 0)
-            )
-            return JSONResponse(status_code=503, content=error_response.dict())
+        # 2) For chinese→shathyar, AI service is required and already validated during service creation
 
         # Now rate-limit and proceed
         rate_check = await rate_limiter.check_rate_limit(client_ip, user_agent)

@@ -138,15 +138,15 @@ class TranslationRAG:
     
     def _extract_chinese_keywords(self, text: str) -> List[str]:
         """提取中文关键词"""
-        
+
         # 基础文本清理
         text = normalize_text(text)
-        
+
         # 简单的中文分词 (基于字符和标点)
         # 这里使用简化方法，实际项目中可考虑使用jieba等专业分词工具
         words = []
         current_word = ""
-        
+
         for char in text:
             if char.isspace() or char in '，。！？；：、""''（）【】《》…——':
                 if current_word and current_word not in self.chinese_stopwords:
@@ -154,22 +154,37 @@ class TranslationRAG:
                 current_word = ""
             else:
                 current_word += char
-        
+
         if current_word and current_word not in self.chinese_stopwords:
             words.append(current_word)
-        
+
         # 提取2-4字的词组作为关键词
         keywords = []
         for word in words:
             if 2 <= len(word) <= 4:
                 keywords.append(word)
-        
+
+                # 如果词长度大于2，也添加所有2字子词用于更好的匹配
+                if len(word) > 2:
+                    for i in range(len(word) - 1):
+                        subword = word[i:i+2]
+                        if subword not in self.chinese_stopwords:
+                            keywords.append(subword)
+
         # 如果没有合适长度的词，使用单字
         if not keywords:
-            keywords = [char for char in text if char not in self.chinese_stopwords 
+            keywords = [char for char in text if char not in self.chinese_stopwords
                        and not char.isspace() and char.isalnum()]
-        
-        return keywords
+
+        # 去重保持顺序
+        seen = set()
+        unique_keywords = []
+        for kw in keywords:
+            if kw not in seen:
+                seen.add(kw)
+                unique_keywords.append(kw)
+
+        return unique_keywords
     
     def _extract_shathyar_keywords(self, text: str) -> List[str]:
         """提取Shathyar关键词"""
