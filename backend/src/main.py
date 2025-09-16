@@ -174,12 +174,22 @@ env_origins = os.getenv("CORS_ALLOW_ORIGINS")
 if env_origins:
     default_origins.extend([o.strip() for o in env_origins.split(",") if o.strip()])
 
+# In production, ensure we have at least the frontend origin
+if not frontend_origin and not env_origins:
+    # Default production frontend (GitHub Pages)
+    production_frontend = "https://1120370331.github.io"
+    default_origins.append(production_frontend)
+    logger.warning(f"🔧 No FRONTEND_ORIGIN set, adding default production origin: {production_frontend}")
+
+logger.info(f"🌐 CORS allowed origins: {default_origins}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=default_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],  # 确保响应头被暴露
 )
 
 # GZip compression middleware
