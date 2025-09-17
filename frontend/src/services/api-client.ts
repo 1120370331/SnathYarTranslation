@@ -43,7 +43,7 @@ http.interceptors.request.use((config) => {
 export const apiClient = {
   async getQuota(): Promise<QuotaStatus> {
     try {
-      const { data } = await http.get('/session/quota')
+      const { data } = await http.get('/session/quota', { timeout: 90000 })
       // Normalize field names from backend
       const q: QuotaStatus = {
         tokens_remaining: data.tokens_remaining ?? data.magic_power_remaining ?? 0,
