@@ -49,6 +49,12 @@ const TranslationPage: React.FC = () => {
       remaining: nextRemaining
     }))
 
+    if (!magicPower.total || magicPower.total <= 0) {
+      apiClient.getQuota().then(q => {
+        setMagicPower({ remaining: q.tokens_remaining, total: q.daily_limit, resetTime: q.reset_time })
+      }).catch(() => {/* ignore; will retry later */})
+    }
+
     // If quota unchanged, show "no deduction" mystical toast; else normal success
     if (nextRemaining === prevRemaining) {
       toast(
@@ -270,3 +276,4 @@ const TranslationPage: React.FC = () => {
 }
 
 export default TranslationPage
+

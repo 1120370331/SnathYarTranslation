@@ -21,11 +21,13 @@ export const MagicPowerIndicator: React.FC<MagicPowerIndicatorProps> = ({
   const [timeToReset, setTimeToReset] = useState<string>('');
 
   // Calculate percentage for progress bar
-  const percentage = total > 0 ? Math.round((remaining / total) * 100) : 0;
+  const safeTotal = total > 0 ? total : 0;
+  const percentage = safeTotal > 0 ? Math.round((remaining / safeTotal) * 100) : 100;
 
   // Determine power level state for styling
   const getPowerLevelClass = (): string => {
-    const ratio = remaining / total;
+    const safeTotal = total > 0 ? total : 0;
+    const ratio = safeTotal > 0 ? remaining / safeTotal : 1;
     if (ratio >= 0.8) return 'high';
     if (ratio >= 0.3) return 'medium';
     return 'low';
@@ -83,7 +85,7 @@ export const MagicPowerIndicator: React.FC<MagicPowerIndicatorProps> = ({
           powerLevelClass === 'medium' ? 'text-blue-400' : 
           'text-green-400'
         }`}>
-          {remaining}/{total}
+          {remaining}/{total > 0 ? total : '—'}
         </span>
       </div>
 
