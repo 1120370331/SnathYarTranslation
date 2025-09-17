@@ -1,7 +1,6 @@
 /**
- * API Client for backend integration with graceful fallbacks.
- * - Primary: call backend endpoints
- * - Fallback: localStorage simulation to avoid quota reset on refresh
+ * API Client for backend integration (no mock or local fallbacks in production).
+ * - Strictly calls backend endpoints; if unreachable, throws errors for UI to handle.
  */
 
 import axios from 'axios'
@@ -41,61 +40,6 @@ http.interceptors.request.use((config) => {
   return config
 })
 
-// Fallback quota store (per-browser, per-day) used only if backend is unreachable
-const LS_KEY = 'shathyar_quota_v1'
-
-function getLocalQuota(): QuotaStatus {
-  try {
-    const raw = localStorage.getItem(LS_KEY)
-    if (raw) {
-      const data = JSON.parse(raw)
-      if (data.reset_time && new Date(data.reset_time).getTime() > Date.now()) {
-        return data
-      }
-    }
-  } catch {}
-  const reset = new Date()
-  reset.setUTCHours(0, 0, 0, 0)
-  if (reset.getTime() <= Date.now()) {
-    reset.setUTCDate(reset.getUTCDate() + 1)
-  }
-  const initial: QuotaStatus = {
-    tokens_remaining: 500,
-    daily_limit: 500,
-    reset_time: reset.toISOString(),
-  }
-  try { localStorage.setItem(LS_KEY, JSON.stringify(initial)) } catch {}
-  return initial
-}
-
-function setLocalQuota(q: QuotaStatus) {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(q)) } catch {}
-}
-
-function consumeLocalToken(): QuotaStatus {
-  const q = getLocalQuota()
-  if (q.tokens_remaining <= 0) return q
-  const updated = { ...q, tokens_remaining: q.tokens_remaining - 1 }
-  setLocalQuota(updated)
-  return updated
-}
-
-// Minimal Shathyar-style generator as ultimate fallback (kept very lightweight)
-function generateShathyar(text: string): string {
-  const syl = ['ak','an','al','sh','th','ul','za','ra','qu','gul','ka','iil','bw','ez']
-  const end = ["'ah","'gl","'th","'ov"]
-  const words = Math.max(1, Math.min(5, Math.ceil(text.length / 2)))
-  const result: string[] = []
-  for (let i=0;i<words;i++) {
-    let w = ''
-    const n = Math.random() > 0.7 ? 3 : Math.random() > 0.3 ? 2 : 1
-    for (let j=0;j<n;j++) w += syl[Math.floor(Math.random()*syl.length)]
-    if (Math.random()>0.5) w += end[Math.floor(Math.random()*end.length)]
-    result.push(w.charAt(0).toUpperCase()+w.slice(1))
-  }
-  return result.join(' ')
-}
-
 export const apiClient = {
   async getQuota(): Promise<QuotaStatus> {
     try {
@@ -110,83 +54,26 @@ export const apiClient = {
       }
       return q
     } catch (err) {
-      // Backend unavailable: use local fallback
-      return getLocalQuota()
+      // No local fallback; surface error to UI
+      if (axios.isAxiosError(err)) {
+        const msg = (err.response?.data && (err.response.data.error || err.response.data.detail)) || '无法获取配额 / Failed to fetch quota'
+        throw new Error(msg)
+      }
+      throw new Error('无法获取配额，后端不可用 / Failed to fetch quota, backend unreachable')
     }
   },
 
   async translate(req: TranslationRequest): Promise<TranslationResponse> {
     try {
       const { data } = await http.post('/translate', req)
-      // Backend returns the authoritative remaining power
       return data
     } catch (err) {
-      // If backend responded with an error, propagate it so UI can show proper message
-      if (axios.isAxiosError(err) && err.response) {
-        const msg = (err.response.data && (err.response.data.error || err.response.data.detail)) || '翻译失败'
+      // Propagate backend error or network issue
+      if (axios.isAxiosError(err)) {
+        const msg = (err.response?.data && (err.response.data.error || err.response.data.detail)) || '翻译失败'
         throw new Error(msg)
       }
-      // Optionally disable fallback in development via Vite env
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore
-      if (import.meta?.env?.VITE_DISABLE_FALLBACK === 'true') {
-        throw new Error('后端不可用 / Backend unreachable')
-      }
-      // Fallback: simulate with local quota so refresh doesn't reset
-      const raw = localStorage.getItem('shathyar_cache_v1')
-      const cache: Record<string, string> = raw ? JSON.parse(raw) : {}
-      if (req.source_language === 'chinese') {
-        // 1) If we already have a cached mapping, return it without consuming
-        const existing = cache[req.text]
-        if (existing) {
-          return {
-            translated_text: existing,
-            source_text: req.text,
-            is_cached: true,
-            is_ai_generated: true,
-            can_edit: false,
-            translation_id: 'local_cache',
-            magic_power_remaining: getLocalQuota().tokens_remaining,
-            source: 'cache',
-          }
-        }
-        // 2) Otherwise generate once, store mapping, and consume quota
-        const q = consumeLocalToken()
-        if (q.tokens_remaining < 0) {
-          throw new Error('魔力耗尽，请等待重置 / Magic power exhausted, please wait for reset')
-        }
-        const gen = generateShathyar(req.text)
-        cache[req.text] = gen
-        try { localStorage.setItem('shathyar_cache_v1', JSON.stringify(cache)) } catch {}
-        return {
-          translated_text: gen,
-          source_text: req.text,
-          is_cached: false,
-          is_ai_generated: true,
-          can_edit: true,
-          confidence_score: 0.8,
-          translation_id: 'local_' + Date.now(),
-          magic_power_remaining: getLocalQuota().tokens_remaining,
-          source: 'ai_generated',
-        }
-      } else {
-        // Reverse lookup from local cache: find CN where value equals SH
-        const entry = Object.entries(cache).find(([, sh]) => sh === req.text)
-        if (entry) {
-          const [cn] = entry
-          return {
-            translated_text: cn,
-            source_text: req.text,
-            is_cached: true,
-            is_ai_generated: true,
-            can_edit: false,
-            magic_power_remaining: getLocalQuota().tokens_remaining,
-            source: 'cache',
-          }
-        }
-        // Do not fake a result; bubble up error for UI to show failure
-        throw new Error('破译失败…… / Decryption failed…')
-      }
+      throw new Error('后端不可用 / Backend unreachable')
     }
   },
 
@@ -198,9 +85,8 @@ export const apiClient = {
       return data
     } catch (err) {
       // Do NOT pretend success: confirmation must persist on backend
-      // to enable reverse lookup and future caching as per PRD.
-      if (axios.isAxiosError(err) && err.response) {
-        const msg = (err.response.data && (err.response.data.error || err.response.data.detail)) || '确认失败，未保存到服务器'
+      if (axios.isAxiosError(err)) {
+        const msg = (err.response?.data && (err.response.data.error || err.response.data.detail)) || '确认失败，未保存到服务器'
         throw new Error(msg)
       }
       throw new Error('确认失败，后端不可用 / Confirmation failed, backend unreachable')

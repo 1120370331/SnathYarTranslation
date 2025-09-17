@@ -18,7 +18,7 @@ const TranslationPage: React.FC = () => {
     resetTime: undefined as string | undefined
   })
 
-  // Initialize magic power from backend (or local fallback) on mount
+  // Initialize magic power from backend on mount
   useEffect(() => {
     let mounted = true
     apiClient.getQuota().then(q => {
@@ -28,7 +28,14 @@ const TranslationPage: React.FC = () => {
         total: q.daily_limit,
         resetTime: q.reset_time,
       })
-    }).catch(() => {/* handled inside apiClient via fallback */})
+    }).catch((err) => {
+      // Surface backend connectivity issue to the user; no silent fallback
+      console.error('Failed to fetch quota:', err)
+      setMagicPower({ remaining: 0, total: 0, resetTime: undefined })
+      try {
+        toast.error('无法连接后端服务，请稍后重试 / Cannot connect to backend service')
+      } catch {}
+    })
     return () => { mounted = false }
   }, [])
 

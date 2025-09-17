@@ -1,9 +1,9 @@
 /**
  * useTranslation Hook (backend-first)
  *
- * Delegates to backend API to enforce one-IP-per-day quota. The apiClient
- * includes a localStorage fallback so refreshing the page will NOT reset
- * displayed quota even when backend is unreachable.
+ * Delegates to backend API to enforce one-IP-per-day quota.
+ * No local mocks or fallbacks; if the backend is unreachable, errors propagate
+ * and are displayed by the UI.
  */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
