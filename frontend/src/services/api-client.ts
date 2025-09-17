@@ -32,7 +32,7 @@ export interface QuotaStatus {
 }
 
 // Axios instance with dynamic baseURL from runtime config
-const http = axios.create({ timeout: 15000 })
+const http = axios.create({ timeout: 15000 }) // default; translate() overrides to longer timeout
 
 http.interceptors.request.use((config) => {
   const base = getAppConfig().apiBaseUrl || '/api/v1'
@@ -65,7 +65,7 @@ export const apiClient = {
 
   async translate(req: TranslationRequest): Promise<TranslationResponse> {
     try {
-      const { data } = await http.post('/translate', req)
+      const { data } = await http.post('/translate', req, { timeout: 120000 })
       return data
     } catch (err) {
       // Propagate backend error or network issue
