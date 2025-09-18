@@ -39,8 +39,8 @@ class CircuitBreakerConfig:
     """Circuit breaker configuration"""
     failure_threshold: int = 5          # Failures before opening
     success_threshold: int = 2          # Successes to close from half-open
-    timeout_duration: int = 60          # Seconds to wait before half-open
-    request_timeout: int = 60           # Request timeout in seconds (some models are slower)
+    timeout_duration: int = 90          # Seconds to wait before half-open (post-timeout cooldown)
+    request_timeout: int = 120           # Request timeout in seconds (free cold starts can take ~60s+)
 
 
 class AIClient:
@@ -82,7 +82,7 @@ class AIClient:
         
         # HTTP session (reused for keep-alive to reduce latency)
         timeout_val = int(os.getenv('SHATHYAR_AI_TIMEOUT', self.circuit_config.request_timeout))
-        self._timeout = aiohttp.ClientTimeout(total=timeout_val)
+        self._timeout = aiohttp.ClientTimeout(total=timeout_val, connect=timeout_val, sock_read=timeout_val, sock_connect=timeout_val)
         self._connector = aiohttp.TCPConnector(limit=100, ssl=False, ttl_dns_cache=300)
         self._session: Optional[aiohttp.ClientSession] = None
         
