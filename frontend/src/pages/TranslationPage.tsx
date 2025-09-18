@@ -9,7 +9,7 @@ import React, { useEffect, useState } from 'react'
 import { TranslationForm } from '../components/TranslationForm'
 import { MagicPowerIndicator } from '../components/MagicPowerIndicator'
 import toast from 'react-hot-toast'
-import { apiClient } from '../services/api-client'
+import { apiClient, getCachedQuota, warmupBackend } from '../services/api-client'
 
 const TranslationPage: React.FC = () => {
   const [magicPower, setMagicPower] = useState({
@@ -20,6 +20,17 @@ const TranslationPage: React.FC = () => {
 
   // Initialize magic power from backend on mount
   useEffect(() => {
+    // Silent warm-up (Render free cold start)
+    try { warmupBackend() } catch {}
+
+    // Use cached quota immediately if present (1-day TTL)
+    try {
+      const cached = getCachedQuota && getCachedQuota()
+      if (cached) {
+        setMagicPower({ remaining: cached.tokens_remaining, total: cached.daily_limit, resetTime: cached.reset_time })
+      }
+    } catch {}
+
     let mounted = true
     apiClient.getQuota().then(q => {
       if (!mounted) return
@@ -32,9 +43,7 @@ const TranslationPage: React.FC = () => {
       // Surface backend connectivity issue to the user; no silent fallback
       console.error('Failed to fetch quota:', err)
       setMagicPower({ remaining: 0, total: 0, resetTime: undefined })
-      try {
-        toast.error('无法连接后端服务，请稍后重试 / Cannot connect to backend service')
-      } catch {}
+      // silent warm-up: no toast on quota failure during cold start
     })
     return () => { mounted = false }
   }, [])

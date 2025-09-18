@@ -40,6 +40,50 @@ http.interceptors.request.use((config) => {
   return config
 })
 
+
+// Quota cache (1-day TTL based on backend reset_time)
+const QS_KEY = 'shathyar_quota_cache_v2'
+
+function loadCachedQuota(): QuotaStatus | null {
+  try {
+    const raw = localStorage.getItem(QS_KEY)
+    if (!raw) return null
+    const data = JSON.parse(raw)
+    if (!data || !data.reset_time) return null
+    const rt = new Date(data.reset_time).getTime()
+    if (isNaN(rt) || rt <= Date.now()) {
+      try { localStorage.removeItem(QS_KEY) } catch {}
+      return null
+    }
+    return data as QuotaStatus
+  } catch { return null }
+}
+
+function saveCachedQuota(q: QuotaStatus) {
+  try { localStorage.setItem(QS_KEY, JSON.stringify(q)) } catch {}
+}
+
+export function getCachedQuota(): QuotaStatus | null {
+  return loadCachedQuota()
+}
+
+export async function warmupBackend(): Promise<void> {
+  try {
+    const base = getAppConfig().apiBaseUrl || '/api/v1'
+    let healthUrl = '/health'
+    try {
+      const u = new URL(base, window.location.origin)
+      healthUrl = u.origin + '/health'
+    } catch {}
+    const ctrl = new AbortController()
+    const t = setTimeout(() => ctrl.abort(), 60000)
+    try {
+      await fetch(healthUrl, { signal: ctrl.signal, cache: 'no-store', mode: 'cors' })
+    } catch {}
+    clearTimeout(t)
+  } catch {}
+}
+
 export const apiClient = {
   async getQuota(): Promise<QuotaStatus> {
     try {
@@ -52,9 +96,12 @@ export const apiClient = {
         time_to_reset_seconds: data.time_to_reset_seconds,
         is_blocked: data.is_blocked,
       }
+      saveCachedQuota(q)
       return q
     } catch (err) {
-      // No local fallback; surface error to UI
+      // On error: return cached quota if valid; else surface error
+      const cached = loadCachedQuota()
+      if (cached) return cached
       if (axios.isAxiosError(err)) {
         const msg = (err.response?.data && (err.response.data.error || err.response.data.detail)) || '无法获取配额 / Failed to fetch quota'
         throw new Error(msg)
@@ -66,6 +113,13 @@ export const apiClient = {
   async translate(req: TranslationRequest): Promise<TranslationResponse> {
     try {
       const { data } = await http.post('/translate', req, { timeout: 120000 })
+      // sync tokens in cache if present
+      try {
+        const cached = loadCachedQuota()
+        if (cached && typeof data.magic_power_remaining === 'number') {
+          saveCachedQuota({ ...cached, tokens_remaining: data.magic_power_remaining })
+        }
+      } catch {}
       return data
     } catch (err) {
       // Propagate backend error or network issue
@@ -82,6 +136,13 @@ export const apiClient = {
       const { data } = await http.post(`/translate/${encodeURIComponent(translationId)}/confirm`, {
         edited_text: editedText,
       })
+      // sync tokens in cache if present
+      try {
+        const cached = loadCachedQuota()
+        if (cached && typeof data.magic_power_remaining === 'number') {
+          saveCachedQuota({ ...cached, tokens_remaining: data.magic_power_remaining })
+        }
+      } catch {}
       return data
     } catch (err) {
       // Do NOT pretend success: confirmation must persist on backend
